@@ -161,7 +161,7 @@ export default defineEventHandler(async (event) => {
         [0, 1, 0],
         [1, 1, 0],
         [0, 1, 1],
-        [0, 1, 1],
+        [0, 1, 0],
       ],
       [
         [0, 1, 0],
@@ -219,9 +219,14 @@ export default defineEventHandler(async (event) => {
     ],
   };
 
-  const puzzle = new Puzzle(p6);
+  // Do not log anything for better speed.
+  // console.log = () => {};
+
+  const puzzle = new Puzzle(p5);
 
   await puzzle.bruteForceSolution();
+  console.log(puzzle.solutions.length, puzzle.solutions);
+  puzzle.possibleSolutionStarts.length = 0;
 
   return {
     puzzle,

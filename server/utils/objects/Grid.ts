@@ -7,41 +7,41 @@ export class Grid<T> {
 
   isSolution?: boolean;
 
-  constructor(grid: GridLike<T>) {
+  constructor (grid: GridLike<T>) {
     this.grid = grid;
     this.rows = this.#rowsCount;
     this.cols = this.#colsCount;
   }
 
-  get #rowsCount() {
+  get #rowsCount () {
     return this.grid.length;
   }
 
-  get #colsCount() {
+  get #colsCount () {
     return this.grid[0].length;
   }
 
-  get(x: number, y: number) {
+  get (x: number, y: number) {
     return this.grid.at(y)?.at(x);
   }
 
-  get topLeft() {
+  get topLeft () {
     return this.get(0, 0)!;
   }
 
-  get topRight() {
+  get topRight () {
     return this.get(-1, 0)!;
   }
 
-  get bottomLeft() {
+  get bottomLeft () {
     return this.get(0, -1)!;
   }
 
-  get bottomRight() {
+  get bottomRight () {
     return this.get(-1, -1)!;
   }
 
-  toString() {
+  toString () {
     let str = '';
 
     for (const row of this.grid) {
@@ -53,11 +53,7 @@ export class Grid<T> {
     return str;
   }
 
-  // toJSON() {
-  //   return this.toString();
-  // }
-
-  toEmpty<T extends number | boolean>(value: T) {
+  toEmpty<T extends number | boolean> (value: T) {
     const cols = new Array<T>(this.cols).fill(value);
 
     const rows = new Array(this.rows)
@@ -67,15 +63,15 @@ export class Grid<T> {
     return new Grid<T>(rows);
   }
 
-  clone() {
+  clone () {
     return new Grid<T>(structuredClone(this.grid));
   }
 
-  static assertNumericGrid(grid: Grid<unknown>): grid is Grid<number> {
+  static assertNumericGrid (grid: Grid<unknown>): grid is Grid<number> {
     return typeof grid.get(0, 0) === 'number';
   }
 
-  stack(figureCount: number, ...grids: Grid<number>[]): Grid<number> {
+  stack (figureCount: number, ...grids: Grid<number>[]): Grid<number> {
     Grid.assertNumericGrid(this);
 
     const newGrid = this.clone() as Grid<number>;
@@ -83,9 +79,7 @@ export class Grid<T> {
     /*
     for (const [rowIndex, row] of newGrid.grid.entries()) {
       for (const [colIndex, colVal] of row.entries()) {
-        const otherGridsValsStacked = 
-        grids.map(grid => grid.get(colIndex, rowIndex)!);
-        
+        const otherGridsValsStacked = grids.map(grid => grid.get(colIndex, rowIndex)!);
         newGrid.grid[rowIndex]![colIndex]! = (colVal + otherGridsValsStacked) % figureCount;
       }
     }
@@ -94,8 +88,9 @@ export class Grid<T> {
     for (const grid of grids) {
       newGrid.grid = newGrid.grid.map((row, rowIndex) =>
         row.map(
-          (colVal, colIndex) =>
-            (colVal + grid.grid[rowIndex][colIndex]) % figureCount
+          (colVal, colIndex) => (
+            colVal + grid.grid[rowIndex][colIndex]
+          ) % figureCount
         )
       );
     }
@@ -103,11 +98,11 @@ export class Grid<T> {
     return newGrid;
   }
 
-  everyValueIs(value: T) {
+  everyValueIs (value: T) {
     return this.grid.every((row) => row.every((colVal) => colVal === value));
   }
 
-  checkIsSolution(value: T) {
+  checkIsSolution (value: T) {
     this.isSolution = this.everyValueIs(value);
   }
 }

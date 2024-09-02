@@ -7,21 +7,30 @@
 
     <NuxtErrorBoundary>
       <template v-if="result">
-        <h2>Calculation duration</h2>
-        <p>{{ result.calculationDuration.toFixed(2) }} ms</p>
+        <h2>Info</h2>
+        <p><strong>Calculation duration:</strong> {{ result.calculationDuration.toFixed(2) }} ms</p>
+        <p><strong>Total number of possible puzzle piece combinations:</strong> {{ numberFormatter.format(result.puzzle.meta.totalNumberOfPossibleCombinations) }}</p>
+        <p><strong>Total number of tried puzzle piece combinations:</strong> {{ numberFormatter.format(result.puzzle.meta.totalNumberOfTriedCombinations) }}</p>
+        <p><strong>Target figure:</strong> {{ result.puzzle.targetFigure.value }}</p>
+        <p><strong>Found solution:</strong> {{ result.puzzle.solutions.length > 0 ? 'yes' : 'no' }}</p>
+        <p><strong>Max one solution returned:</strong> {{ result.puzzle.meta.returningMaxOneSolution ? 'yes' : 'no' }}</p>
 
         <h2>Game board</h2>
         <Grid :grid="result.puzzle.gameBoard.grid.grid" />
 
-        <h2>
-          Puzzle pieces ({{ Object.keys(result.puzzle.puzzlePieces).length }})
-        </h2>
-        <template v-for="puzzlePiece of result.puzzle.puzzlePieces">
-          <h3>{{ puzzlePiece.id }}</h3>
-          <Grid :grid="puzzlePiece.grid.grid" puzzlePiece />
-        </template>
+        <details>
+          <summary>
+            <h2>
+              Puzzle pieces ({{ Object.keys(result.puzzle.puzzlePieces).length }})
+            </h2>
+          </summary>
+          <template v-for="puzzlePiece of result.puzzle.puzzlePieces">
+            <h3>{{ puzzlePiece.id }}</h3>
+            <Grid :grid="puzzlePiece.grid.grid" puzzlePiece />
+          </template>
+        </details>
 
-        <details open>
+        <details>
           <summary>
             <h2>
               Phase 1: possible solutions for corners only ({{
@@ -34,8 +43,7 @@
           </p>
           <template
             v-else
-            v-for="(possibleSolutionStart, index) of result.puzzle
-              .possibleSolutionStarts"
+            v-for="(possibleSolutionStart, index) of result.puzzle.possibleSolutionStarts"
           >
             <h3>#{{ index + 1 }}</h3>
             <h4>
@@ -47,7 +55,7 @@
                 possibleSolutionStart.length ===
                 Object.keys(result.puzzle.puzzlePieces).length
                   ? possibleSolutionStart.length
-                    ? possibleSolutionStart.at(-1)!.after.isSolution
+                    ? possibleSolutionStart.at(-1)!.after!.isSolution
                       ? '✅ solution'
                       : '❌ no solution'
                     : 'state unknown'
@@ -59,15 +67,15 @@
               <h5>{{ part.id }}</h5>
 
               <div class="f">
-                <Grid :grid="part.before.grid" />
+                <Grid :grid="part.before!.grid" />
                 ➕
                 <Grid :grid="part.grid.grid" puzzlePiece />
                 ➡️
-                <Grid :grid="part.after.grid" />
+                <Grid :grid="part.after!.grid" />
                 <span
-                  v-if="part.after.isSolution !== undefined"
+                  v-if="part.after!.isSolution !== undefined"
                   style="font-size: 1.5rem; margin-left: 0.5rem"
-                  >{{ part.after.isSolution ? '✅' : '❌' }}</span
+                  >{{ part.after!.isSolution ? '✅' : '❌' }}</span
                 >
               </div>
             </template>
@@ -76,7 +84,7 @@
 
         <details open>
           <summary>
-            <h2>Phase 2: solutions ({{ result.puzzle.solutions.length }})</h2>
+            <h2>Phase 2: solutions ({{ result.puzzle.solutions.length }}{{ result.puzzle.meta.returningMaxOneSolution ? ' — maximized at one' : '' }})</h2>
           </summary>
           <p v-if="!result.puzzle.solutions.length">No solutions possible.</p>
           <template v-else v-for="(solution, index) of result.puzzle.solutions">
@@ -85,24 +93,21 @@
             <p v-if="!solution.length">None.</p>
             <template v-else v-for="part of solution">
               <h5>
-                {{ part.id
-                }}{{
+                {{ part.id }}{{
                   part.partOfPossibleSolution !== undefined
-                    ? ` (part of possible solution #${
-                        part.partOfPossibleSolution + 1
-                      })`
+                    ? ` (part of possible solution #${part.partOfPossibleSolution + 1})`
                     : ''
                 }}
               </h5>
 
               <div class="f">
-                <Grid :grid="part.before.grid" />
+                <Grid :grid="part.before!.grid" />
                 ➕
                 <Grid :grid="part.grid.grid" puzzlePiece />
                 ➡️
-                <Grid :grid="part.after.grid" />
+                <Grid :grid="part.after!.grid" />
                 <span
-                  v-if="part.after.isSolution"
+                  v-if="part.after!.isSolution"
                   style="font-size: 1.5rem; margin-left: 0.5rem"
                   >✅</span
                 >
@@ -127,20 +132,19 @@
             <h4>Puzzle pieces</h4>
             <template v-for="part of nonSolution">
               <h5>
-                {{ part.id
-                }}{{
-                  part.partOfCornerCombination
-                    ? ' (part of corner combination)'
+                {{ part.id }}{{
+                  part.partOfPossibleSolution !== undefined
+                    ? ` (part of possible solution #${part.partOfPossibleSolution + 1})`
                     : ''
                 }}
               </h5>
 
               <div class="f">
-                <Grid :grid="part.before.grid" />
+                <Grid :grid="part.before!.grid" />
                 ➕
                 <Grid :grid="part.grid.grid" puzzlePiece />
                 ➡️
-                <Grid :grid="part.before.grid" />
+                <Grid :grid="part.before!.grid" />
                 <span style="font-size: 1.5rem; margin-left: 0.5rem">❌</span>
               </div>
             </template>
@@ -166,18 +170,25 @@
 // const rowCount = useLocalStorage('rowCount', 6);
 // const colCount = useLocalStorage('colCount', 6);
 
-const result = ref<string>(undefined);
-const resultStatus = ref<string>('idle');
+const result = ref<Awaited<ReturnType<typeof calculate>>>();
+// const resultStatus = ref<string>('idle');
+
+const lang = 'nl-NL';
+const numberFormatter = new Intl.NumberFormat(lang);
+
+function calculate () {
+  return $fetch('/api/calculate-solutions');
+}
 
 async function run() {
-  result.value = await $fetch('/api/calculate-solutions');
+  result.value = await calculate();
 }
 
 function print() {
   window.print();
 }
 
-await run();
+// await run();
 </script>
 
 <style>

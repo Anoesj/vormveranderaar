@@ -1,5 +1,6 @@
 import { Grid, type GridLike } from './Grid';
-import { type CornerType, type Position } from './Puzzle';
+import { Position } from './Position';
+import { type CornerType } from './Puzzle';
 import { type GameBoard } from './GameBoard';
 
 export class PuzzlePiece {
@@ -11,7 +12,12 @@ export class PuzzlePiece {
   spansXAxis: boolean;
   spansYAxis: boolean;
   canAvoidEdges: boolean;
-  canAvoidCorners: boolean;
+  canAvoidAffectingSomeCorners: boolean;
+
+  possiblePositions: Position[];
+  possiblePositionsWhereCornersNotAffected: Position[];
+
+  #gameBoardGridCache: WeakMap<Position, Grid<number>> = new WeakMap();
 
   constructor (grid: GridLike<number>,id: string, gameBoard: GameBoard) {
     this.id = id;
@@ -26,7 +32,7 @@ export class PuzzlePiece {
       rows,
       cols,
     } = this.grid;
-    
+
     this.activeCorners = {
       topLeft: Boolean(topLeft),
       topRight: Boolean(topRight),
@@ -39,44 +45,92 @@ export class PuzzlePiece {
 
     this.canAvoidEdges = gameBoard.grid.rows >= rows + 2 && gameBoard.cols >= cols + 2;
 
-    this.canAvoidCorners = this.canAvoidEdges || (
-      Object.values(this.activeCorners).some(val => val === false)
-      && !this.spansXAxis
-      && !this.spansYAxis
-    ) 
-    || (
-      ((!topLeft && !bottomLeft) || (!topRight && !bottomRight))
-      && !this.spansXAxis
-    )
-    || (
-      ((!topLeft && !topRight) || (!bottomLeft && !bottomRight))
-      && !this.spansYAxis
-    );
+    this.canAvoidAffectingSomeCorners = this.#canAvoidAffectingSomeCorners;
+
+    this.possiblePositions = this.#possiblePositions;
+    this.possiblePositionsWhereCornersNotAffected = this.possiblePositions.filter((position) => {
+      const onGameBoardGrid = this.toGameBoardSizedGridWithPuzzlePieceAt(position);
+
+      return (
+        !onGameBoardGrid.topLeft
+        && !onGameBoardGrid.topRight
+        && !onGameBoardGrid.bottomLeft
+        && !onGameBoardGrid.bottomRight
+      );
+    });
   }
 
-  at (position: [number, number]): Grid<number> {
+  toGameBoardSizedGridWithPuzzlePieceAt (position: Position): Grid<number> {
+    if (this.#gameBoardGridCache.has(position)) {
+      return this.#gameBoardGridCache.get(position)!;
+    }
+
     const puzzlePieceGrid = this.grid.grid;
 
     const onGameBoardGrid = this.#gameBoard.grid.toEmpty<number>(0);
 
     onGameBoardGrid.grid = onGameBoardGrid.grid.map((row, rowIndex) => {
       return row.map((_colVal, colIndex) => {
-        const ri = rowIndex - position [1];
-        const ci = colIndex - position[0];
+        const ri = rowIndex - position.y;
+        const ci = colIndex - position.x;
         return puzzlePieceGrid[ri]?.[ci] ?? 0;
       });
     });
 
+    this.#gameBoardGridCache.set(position, onGameBoardGrid);
+
     return onGameBoardGrid;
   }
 
-  getPossiblePositions (): Position[] {
+  get #canAvoidAffectingSomeCorners (): boolean {
+    const {
+      canAvoidEdges,
+      spansXAxis,
+      spansYAxis,
+      activeCorners,
+    } = this;
+
+    return (
+      // If it can avoid edges, it can avoid corners too.
+      canAvoidEdges
+      // If one of the corners of the puzzle piece are inactive,
+      // it can avoid corners if it doesn't span the x or y axis,
+      // because you can always move it some way away from the corner.
+      || (
+        Object.values(activeCorners).some(val => val === false)
+        && !spansXAxis
+        && !spansYAxis
+      )
+      // If the puzzle piece has inactive left or right corners,
+      // it can avoid corners, as long as it doesn't span the X axis,
+      // because you can move the piece to the left or right.
+      || (
+        (
+          (!activeCorners.topLeft && !activeCorners.bottomLeft)
+          || (!activeCorners.topRight && !activeCorners.bottomRight)
+        )
+        && !spansXAxis
+      )
+      // If the puzzle piece has inactive top or bottom corners,
+      // it can avoid corners, as long as it doesn't span the Y axis,
+      // because you can move the piece up or down.
+      || (
+        (
+          (!activeCorners.topLeft && !activeCorners.topRight)
+          || (!activeCorners.bottomLeft && !activeCorners.bottomRight)
+        )
+        && !spansYAxis
+      )
+    );
+  }
+
+  get #possiblePositions (): Position[] {
     const positions: Position[] = [];
-    
+
     const gameBoardGrid = this.#gameBoard.grid;
 
     const {
-      cols: gameBoardCols, 
+      cols: gameBoardCols,
       rows: gameBoardRows,
     } = gameBoardGrid;
 
@@ -95,7 +149,7 @@ export class PuzzlePiece {
           continue;
         }
 
-        positions.push([colIndex, rowIndex ]);
+        positions.push(Position.get(colIndex, rowIndex));
       }
     }
 
