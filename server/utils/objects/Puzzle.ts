@@ -287,26 +287,47 @@ export class Puzzle {
       return c.find((part) => part.id === id);
     }
 
-    function useSamePuzzlePieceOnDifferentPosition(
-      c1: PossiblePuzzlePieceCombination,
-      c2: PossiblePuzzlePieceCombination,
-    ): boolean {
-      const intersection = intersect(c1, c2);
+    function compatible(data: Partial<Record<CornerType, PossiblePuzzlePieceCombination>>): boolean {
+      const keys = Object.keys(data) as CornerType[];
+      const keyCorner1 = keys[0];
+      const keyCorner2 = keys[1];
+      const combinationCorner1 = data[keyCorner1]!;
+      const combinationCorner2 = data[keyCorner2]!;
 
-      if (!intersection.length) {
-        return false;
-      }
-
-      for (const samePuzzlePieceId of intersection) {
-        const part1 = getPartById(c1, samePuzzlePieceId)!;
-        const part2 = getPartById(c2, samePuzzlePieceId)!;
-
-        if (!hasEqualPosition(part1, part2)) {
-          return true;
+      // Check if the combination for corner 1 contains any puzzle pieces that would affect
+      // corner 2 too, while the combination for corner 2 doesn't use those puzzle pieces.
+      for (const part of combinationCorner1) {
+        if (part.affects.includes(keyCorner2) && !combinationCorner2.find((p) => p.id === part.id)) {
+          return false;
         }
       }
 
-      return false;
+      // Check if the combination for corner 2 contains any puzzle pieces that would affect
+      // corner 1 too, while the combination for corner 1 doesn't use those puzzle pieces.
+      for (const part of combinationCorner2) {
+        if (part.affects.includes(keyCorner1) && !combinationCorner1.find((p) => p.id === part.id)) {
+          return false;
+        }
+      }
+
+      // Checks if a and b use the same puzzle piece(s), but with different positions.
+      // If so, return false.
+      const intersection = intersect(combinationCorner1, combinationCorner2);
+
+      if (!intersection.length) {
+        return true;
+      }
+
+      for (const samePuzzlePieceId of intersection) {
+        const part1 = getPartById(combinationCorner1, samePuzzlePieceId)!;
+        const part2 = getPartById(combinationCorner2, samePuzzlePieceId)!;
+
+        if (!hasEqualPosition(part1, part2)) {
+          return false;
+        }
+      }
+
+      return true;
     }
 
     function intersect<
@@ -346,23 +367,23 @@ export class Puzzle {
 
     for (const topLeft of this.cornersInfo!.topLeft.possiblePuzzlePieceCombinations!) {
       for (const topRight of this.cornersInfo!.topRight.possiblePuzzlePieceCombinations!) {
-        if (useSamePuzzlePieceOnDifferentPosition(topLeft, topRight)) {
+        if (!compatible({ topLeft, topRight })) {
           continue;
         }
 
         for (const bottomLeft of this.cornersInfo!.bottomLeft.possiblePuzzlePieceCombinations!) {
           if (
-            useSamePuzzlePieceOnDifferentPosition(topLeft, bottomLeft)
-            || useSamePuzzlePieceOnDifferentPosition(topRight, bottomLeft)
+            !compatible({ topLeft, bottomLeft })
+            || !compatible({ topRight, bottomLeft })
           ) {
             continue;
           }
 
           for (const bottomRight of this.cornersInfo!.bottomRight.possiblePuzzlePieceCombinations!) {
             if (
-              useSamePuzzlePieceOnDifferentPosition(topLeft, bottomRight)
-              || useSamePuzzlePieceOnDifferentPosition(topRight, bottomRight)
-              || useSamePuzzlePieceOnDifferentPosition(bottomLeft, bottomRight)
+              !compatible({ topLeft, bottomRight })
+              || !compatible({ topRight, bottomRight })
+              || !compatible({ bottomLeft, bottomRight })
             ) {
               continue;
             }
@@ -374,10 +395,15 @@ export class Puzzle {
               bottomRight,
             };
 
-            const corners = Object.values(combination);
-
-            const allAffected = corners
+            const allPuzzlePiecesAffectingCorners = Object.values(combination)
+              // Throw all puzzle pieces in one array.
               .flat()
+              // Dedupe by puzzle piece ID. This prevents their 'affects' to be counted multiple times.
+              .filter((item, pos, self) => {
+                return self.findIndex((i) => i.id === item.id) === pos;
+              });
+
+            const allAffected = allPuzzlePiecesAffectingCorners
               .flatMap((corner) => corner.affects);
 
             const affectedCounts: Record<CornerType, number> = {
@@ -391,56 +417,52 @@ export class Puzzle {
               affectedCounts[affected]++;
             }
 
-            const isCompatible = Object.entries(affectedCounts)
+            const affectedCountsCompatible = Object.entries(affectedCounts)
               .every(([cornerType, affectedCount]) => {
                 return this.cornersInfo![cornerType as CornerType].possibleTransforms!.includes(affectedCount);
               });
 
-            if (!isCompatible) {
+            if (!affectedCountsCompatible) {
+              console.log(
+                'Discarded possible solution start, because not all corners are affected by the puzzle pieces the right number of times:',
+                affectedCounts,
+              );
+
               continue;
             }
 
             const possibleSolutionStart: PossibleSolution = [];
 
-            let missingRequiredPuzzlePieces = structuredClone(
-              this.puzzlePiecesThatCannotAvoidAnyCorners
-            );
+            let missingRequiredPuzzlePieces = structuredClone(this.puzzlePiecesThatCannotAvoidAnyCorners);
 
-            for (const [
-              cornerType,
-              possiblePuzzlePieceCombination,
-            ] of Object.entries(combination)) {
-              for (const part of possiblePuzzlePieceCombination) {
-                const puzzlePiece = this.puzzlePieces[part.id];
+            for (const part of allPuzzlePiecesAffectingCorners) {
+              const puzzlePiece = this.puzzlePieces[part.id];
 
-                missingRequiredPuzzlePieces = missingRequiredPuzzlePieces
-                  .filter((p) => p !== part.id);
+              missingRequiredPuzzlePieces = missingRequiredPuzzlePieces
+                .filter((p) => p !== part.id);
 
-                possibleSolutionStart.push({
-                  id: part.id,
-                  position: part.position,
-                  grid: puzzlePiece.toGameBoardSizedGridWithPuzzlePieceAt(part.position),
-                  partOfPossibleSolution: this.possibleSolutionStarts.length,
-                });
-              }
+              possibleSolutionStart.push({
+                id: part.id,
+                position: part.position,
+                grid: puzzlePiece.toGameBoardSizedGridWithPuzzlePieceAt(part.position),
+                partOfPossibleSolution: this.possibleSolutionStarts.length,
+              });
             }
 
             if (missingRequiredPuzzlePieces.length) {
               console.log(
-                'Discarded possible solution start (not all puzzle pieces that influence corners are used in the corners)',
+                'Discarded possible solution start, because not all puzzle pieces that affect corners are used in the corners:',
                 missingRequiredPuzzlePieces,
               );
+
               continue;
             }
 
-            possibleSolutionStart.sort((a, b) =>
-              a.id.localeCompare(b.id, 'en')
-            );
+            possibleSolutionStart.sort((a, b) => a.id.localeCompare(b.id, lang));
 
             if (
-              this.possibleSolutionStarts.find((p) =>
-                possibleSolutionStartsEqual(possibleSolutionStart, p)
-              )
+              this.possibleSolutionStarts
+                .find((p) => possibleSolutionStartsEqual(possibleSolutionStart, p))
             ) {
               console.log('Discarded possible solution start (duplicate)');
               continue;
@@ -475,7 +497,7 @@ export class Puzzle {
   }
 
   logSkippedDuplicateSituations () {
-    console.log(`Skipped duplicate situations thus far: ${numberFormatter.format(this.meta.skippedDuplicateSituations)}`);
+    console.log(`Skipped duplicate situations thus far: ${numberFormatter.format(this.meta.skippedDuplicateSituations)}.`);
   }
 
   async bruteForceSolution () {
@@ -516,7 +538,7 @@ export class Puzzle {
           this.solutions.push(possibleSolutionStart);
 
           if (this.meta.returningMaxOneSolution) {
-            console.log('Returning max one solution, stopping.');
+            console.log('Returning max one solution, stopping the brute force');
             return;
           }
 

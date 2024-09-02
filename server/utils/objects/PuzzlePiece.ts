@@ -40,10 +40,10 @@ export class PuzzlePiece {
       bottomRight: Boolean(bottomRight),
     };
 
-    this.spansXAxis = cols === gameBoard.grid.cols;
-    this.spansYAxis = rows === gameBoard.grid.rows;
+    this.spansXAxis = cols === gameBoard.cols;
+    this.spansYAxis = rows === gameBoard.rows;
 
-    this.canAvoidEdges = gameBoard.grid.rows >= rows + 2 && gameBoard.cols >= cols + 2;
+    this.canAvoidEdges = gameBoard.rows >= rows + 2 && gameBoard.cols >= cols + 2;
 
     this.canAvoidAffectingSomeCorners = this.#canAvoidAffectingSomeCorners;
 
@@ -93,6 +93,12 @@ export class PuzzlePiece {
     return (
       // If it can avoid edges, it can avoid corners too.
       canAvoidEdges
+      // If the puzzle piece can avoid either the top and bottom edges,
+      // or the left and right edges, it can avoid corners.
+      || (
+        this.#gameBoard.rows >= this.grid.rows + 2
+        || this.#gameBoard.cols >= this.grid.cols + 2
+      )
       // If one of the corners of the puzzle piece are inactive,
       // it can avoid corners if it doesn't span the x or y axis,
       // because you can always move it some way away from the corner.
