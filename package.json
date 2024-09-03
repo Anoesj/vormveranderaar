@@ -7,10 +7,20 @@
     "dev": "HOST=0.0.0.0 nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
-    "postinstall": "nuxt prepare"
+    "postinstall": "nuxt prepare",
+    "test": "vitest",
+    "test:once": "vitest run"
   },
   "dependencies": {
+    "@nuxt/eslint": "^0.5.5",
     "@vueuse/core": "^11.0.0",
     "nuxt": "^3.12.4"
+  },
+  "devDependencies": {
+    "@anoesj/eslint-config-anoesj": "github:anoesj/eslint-config-anoesj",
+    "@anoesj/eslint-config-anoesj-vue": "github:anoesj/eslint-config-anoesj-vue",
+    "@nuxt/test-utils": "^3.14.1",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
   }
 }

@@ -1,6 +1,9 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+
 export default defineEventHandler(async (event) => {
   const t0 = performance.now();
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   type ClassArgs<T> = T extends new (...args: infer U) => any ? U : never;
 
   type PuzzleOptions = ClassArgs<typeof Puzzle>[0];
@@ -363,10 +366,12 @@ export default defineEventHandler(async (event) => {
 
   const puzzle = new Puzzle(p18);
 
-  await puzzle.bruteForceSolution();
+  await puzzle.bruteForceSolution({ from: 0, to: 100 });
+  // await puzzle.bruteForceSolution({ from: 220, to: 388 });
+  // await puzzle.bruteForceSolution();
 
   // TODO: Temporary. If not doing this, complex puzzles take way to long to stringify.
-  // puzzle.possibleSolutionStarts.length = 0;
+  puzzle.possibleSolutionStarts.length = 0;
 
   return {
     puzzle,

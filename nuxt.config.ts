@@ -3,4 +3,8 @@ export default defineNuxtConfig({
   compatibilityDate: '2024-08-30',
   ssr: false,
   devtools: { enabled: false },
+  modules: [
+    '@nuxt/test-utils/module',
+    '@nuxt/eslint',
+  ],
 });

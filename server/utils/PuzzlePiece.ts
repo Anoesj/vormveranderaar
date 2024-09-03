@@ -1,11 +1,11 @@
 import { Grid, type GridLike } from './Grid';
 import { Position } from './Position';
-import { type CornerType } from './Puzzle';
-import { type GameBoard } from './GameBoard';
+import type { CornerType } from './Puzzle';
+import type { GameBoard } from './GameBoard';
 
 export class PuzzlePiece {
   id: string;
-  grid: Grid<number>;
+  grid: Grid;
   #gameBoard: GameBoard;
 
   activeCorners: Record<CornerType, boolean>;
@@ -17,9 +17,9 @@ export class PuzzlePiece {
   possiblePositions: Position[];
   possiblePositionsWhereCornersNotAffected: Position[];
 
-  #gameBoardGridCache: WeakMap<Position, Grid<number>> = new WeakMap();
+  #gameBoardGridCache: WeakMap<Position, GameBoard> = new WeakMap();
 
-  constructor (grid: GridLike<number>,id: string, gameBoard: GameBoard) {
+  constructor (grid: GridLike<number>, id: string, gameBoard: GameBoard) {
     this.id = id;
     this.grid = new Grid(grid.map(row => row.map(colValue => colValue)));
     this.#gameBoard = gameBoard;
@@ -48,28 +48,29 @@ export class PuzzlePiece {
     this.canAvoidAffectingSomeCorners = this.#canAvoidAffectingSomeCorners;
 
     this.possiblePositions = this.#possiblePositions;
-    this.possiblePositionsWhereCornersNotAffected = this.possiblePositions.filter((position) => {
-      const onGameBoardGrid = this.toGameBoardSizedGridWithPuzzlePieceAt(position);
+    this.possiblePositionsWhereCornersNotAffected = this.possiblePositions
+      .filter((position) => {
+        const onGameBoardGrid = this.toEmptyGameBoardWithPuzzlePieceAt(position);
 
-      return (
-        !onGameBoardGrid.topLeft
-        && !onGameBoardGrid.topRight
-        && !onGameBoardGrid.bottomLeft
-        && !onGameBoardGrid.bottomRight
-      );
-    });
+        return (
+          !onGameBoardGrid.topLeft
+          && !onGameBoardGrid.topRight
+          && !onGameBoardGrid.bottomLeft
+          && !onGameBoardGrid.bottomRight
+        );
+      });
   }
 
-  toGameBoardSizedGridWithPuzzlePieceAt (position: Position): Grid<number> {
+  toEmptyGameBoardWithPuzzlePieceAt (position: Position): GameBoard {
     if (this.#gameBoardGridCache.has(position)) {
       return this.#gameBoardGridCache.get(position)!;
     }
 
-    const puzzlePieceGrid = this.grid.grid;
+    const puzzlePieceGrid = this.grid.data;
 
-    const onGameBoardGrid = this.#gameBoard.grid.toEmpty<number>(0);
+    const onGameBoardGrid = this.#gameBoard.toEmpty();
 
-    onGameBoardGrid.grid = onGameBoardGrid.grid.map((row, rowIndex) => {
+    onGameBoardGrid.data = onGameBoardGrid.data.map((row, rowIndex) => {
       return row.map((_colVal, colIndex) => {
         const ri = rowIndex - position.y;
         const ci = colIndex - position.x;
@@ -133,19 +134,18 @@ export class PuzzlePiece {
   get #possiblePositions (): Position[] {
     const positions: Position[] = [];
 
-    const gameBoardGrid = this.#gameBoard.grid;
-
     const {
+      data: gameBoardGrid,
       cols: gameBoardCols,
       rows: gameBoardRows,
-    } = gameBoardGrid;
+    } = this.#gameBoard;
 
     const {
       cols: ownCols,
       rows: ownRows,
     } = this.grid;
 
-    for (const [rowIndex, row] of gameBoardGrid.grid.entries()) {
+    for (const [rowIndex, row] of gameBoardGrid.entries()) {
       if (rowIndex + ownRows > gameBoardRows) {
         continue;
       }

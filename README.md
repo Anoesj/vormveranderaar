@@ -1,42 +1,6 @@
-# Nuxt 3 Minimal Starter
-
-Look at the [Nuxt 3 documentation](https://nuxt.com/docs/getting-started/introduction) to learn more.
-
-## Setup
-
-Make sure to install the dependencies:
-
-```bash
-# yarn
-yarn install
-
-# npm
-npm install
-
-# pnpm
-pnpm install
-```
-
-## Development Server
-
-Start the development server on http://localhost:3000
-
-```bash
-npm run dev
-```
-
-## Production
-
-Build the application for production:
-
-```bash
-npm run build
-```
-
-Locally preview production build:
-
-```bash
-npm run preview
-```
-
-Check out the [deployment documentation](https://nuxt.com/docs/getting-started/deployment) for more information.
+### Findings
+- In `Puzzle`, when turning `*puzzlePiecePlacementOptionsIterator` into an `AsyncGenerator`, it gets about 8% slower.
+- In `Puzzle`, when using `setImmediate` in an async version of `*puzzlePiecePlacementOptionsIterator`, it gets about 26% slower than when keeping it sync and leaving out `setImmediate`.
+- Using `for` loops instead of `for..of` loops in critical places did not really affect performance at all.
+- Memory heap keeps going up after every "possible solution start", we need to find a way to clean up memory.
+- `structuredClone` is VERY, VERY SLOW.
