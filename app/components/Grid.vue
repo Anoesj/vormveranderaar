@@ -25,20 +25,16 @@
 
 <script setup lang="ts">
 const {
-  replaceAllWith,
   grid,
-} = withDefaults(
-  defineProps<{
-    grid: {
-      data: unknown[][];
-    };
-    isPuzzlePieceGrid?: boolean;
-    replaceAllWith?: unknown;
-  }>(), {
-    isPuzzlePieceGrid: false,
-    replaceAllWith: undefined,
-  }
-);
+  isPuzzlePieceGrid = false,
+  replaceAllWith = undefined,
+} = defineProps<{
+  grid: {
+    data: unknown[][];
+  };
+  isPuzzlePieceGrid?: boolean;
+  replaceAllWith?: unknown;
+}>();
 
 const gridData = computed(() => {
   if (replaceAllWith === undefined) {
@@ -61,7 +57,8 @@ const gridData = computed(() => {
 
   &.grid--puzzle-piece td {
     &.puzzle-piece-active-cell {
-      background-color: coral;
+      background-color: rgb(62, 62, 62);
+      color: white;
     }
   }
 
@@ -70,11 +67,11 @@ const gridData = computed(() => {
       background-color: white;
     }
     &.figure--1 {
-      background-color: lightblue;
+      background-color: rgb(219, 254, 186);
     }
 
     &.figure--2 {
-      background-color: lightgreen;
+      background-color: rgb(167, 205, 235);
     }
   }
 }

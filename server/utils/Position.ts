@@ -43,7 +43,7 @@ export class Position {
   }
 
   static toString (x: number, y: number) {
-    return `(${x}, ${y})`;
+    return `(x: ${x}, y: ${y})`;
   }
 
   toString () {

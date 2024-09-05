@@ -1,7 +1,15 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
 export default defineEventHandler(async (event) => {
-  const t0 = performance.now();
+  // const { res } = event.node;
+
+  // res.writeHead(200, {
+  //   'Content-Type': 'text/plain',
+  //   // 'Content-Type': 'application/json',
+  //   'Transfer-Encoding': 'chunked',
+  // });
+
+  // let puzzle: InstanceType<typeof Puzzle> | undefined;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   type ClassArgs<T> = T extends new (...args: infer U) => any ? U : never;
@@ -270,6 +278,12 @@ export default defineEventHandler(async (event) => {
     // prettier-ignore
     puzzlePieces: [
       [
+        [0, 1, 1, 1],
+        [1, 1, 0, 1],
+        [0, 1, 0, 0],
+        [0, 1, 1, 0],
+      ],
+      [
         [0, 1, 0, 0, 0],
         [0, 1, 1, 1, 1],
         [1, 1, 0, 1, 0],
@@ -361,20 +375,74 @@ export default defineEventHandler(async (event) => {
     ],
   };
 
-  // Do not log anything for better speed.
-  // console.log = () => {};
+  const puzzle = new Puzzle({
+    figures: [0, 1],
+    gameBoard: [
+      [1, 1, 0],
+      [1, 1, 0],
+      [1, 1, 0],
+    ],
+    // prettier-ignore
+    puzzlePieces: [
+      [
+        [0, 1],
+        [1, 1],
+        [0, 1],
+      ],
+      [
+        [1, 0],
+        [1, 1],
+        [1, 0],
+      ],
+      [
+        [1, 0],
+        [1, 1],
+        [1, 0],
+      ],
+      [
+        [1, 1],
+        [1, 0],
+      ],
+      [
+        [1, 0],
+        [1, 1],
+        [1, 0],
+      ],
+      [
+        [1],
+        [1],
+      ],
+      [
+        [1, 1, 0],
+        [0, 1, 1],
+      ],
+    ],
+  });
 
-  const puzzle = new Puzzle(p18);
+  // function writeChunk() {
+  //   // res.write(JSON.stringify(puzzle, null, 2));
+  //   res.write('___PUZZLE___' + JSON.stringify(puzzle));
+  // }
 
-  await puzzle.bruteForceSolution({ from: 0, to: 100 });
-  // await puzzle.bruteForceSolution({ from: 220, to: 388 });
-  // await puzzle.bruteForceSolution();
+  // writeChunk();
+
+  const iterator = puzzle.bruteForceSolution();
+  // const iterator = puzzle.bruteForceSolution({ from: 747, to: 748 });
+  // // const iterator = puzzle.bruteForceSolution({ from: 387, to: 388 });
+
+  // // const t0 = performance.now();
+  for await (const _success of iterator) {
+    // if (performance.now() - t0 > 2000) {
+    //   writeChunk();
+    // }
+  }
+
+  // writeChunk();
 
   // TODO: Temporary. If not doing this, complex puzzles take way to long to stringify.
-  puzzle.possibleSolutionStarts.length = 0;
+  // puzzle.possibleSolutionStarts.length = 0;
 
-  return {
-    puzzle,
-    calculationDuration: performance.now() - t0,
-  };
+  // res.end();
+
+  return puzzle;
 });

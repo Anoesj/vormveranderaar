@@ -8,6 +8,7 @@ export class PuzzlePiece {
   grid: Grid;
   #gameBoard: GameBoard;
 
+  cellsInfluenced: number;
   activeCorners: Record<CornerType, boolean>;
   spansXAxis: boolean;
   spansYAxis: boolean;
@@ -23,6 +24,10 @@ export class PuzzlePiece {
     this.id = id;
     this.grid = new Grid(grid.map(row => row.map(colValue => colValue)));
     this.#gameBoard = gameBoard;
+
+    this.cellsInfluenced = this.grid.data
+      .flat()
+      .reduce((acc, val) => acc + Math.min(val, 1), 0);
 
     const {
       topLeft,

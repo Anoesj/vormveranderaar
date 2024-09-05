@@ -1,10 +1,14 @@
+// import { heapStats } from 'bun:jsc';
+// import { generateHeapSnapshot } from 'bun';
 // import { setFlagsFromString } from 'v8';
 // import { runInNewContext } from 'vm';
+
 import { Figure } from './Figure';
 import { GameBoard } from './GameBoard';
 import { PuzzlePiece } from './PuzzlePiece';
 import { Position } from './Position';
 import type { GridLike } from './Grid';
+import { PossibleSolution, type PuzzlePiecePlacementOptions } from './PossibleSolution';
 
 export type CornerType = 'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight';
 
@@ -16,28 +20,6 @@ type PossiblePuzzlePieceCombinationPart = {
 
 type PossiblePuzzlePieceCombination = PossiblePuzzlePieceCombinationPart[];
 
-type PuzzlePiecePlacementOptions = {
-  puzzlePiece: PuzzlePiece;
-  possiblePositions: Position[];
-};
-
-type PossibleSolutionPart = {
-  /** The ID of the puzzle piece. */
-  id: PuzzlePiece['id'];
-  /** The position of the puzzle piece on the game board. */
-  position: Position;
-  /** The puzzle piece on an empty game board at the given position. */
-  grid: GameBoard;
-  /** The game board before the puzzle piece was placed. */
-  before?: GameBoard;
-  /** The game board after the puzzle piece was placed. */
-  after?: GameBoard;
-  /** The index of the possible solution this part is part of. */
-  partOfPossibleSolution?: number;
-};
-
-type PossibleSolution = PossibleSolutionPart[];
-
 type CornerInfo = {
   originalValue: number;
   targetValue: number;
@@ -47,8 +29,10 @@ type CornerInfo = {
   possiblePuzzlePieceCombinations?: PossiblePuzzlePieceCombination[];
 };
 
-const lang = 'nl-NL';
-const numberFormatter = new Intl.NumberFormat(lang);
+const numberFormatter = new Intl.NumberFormat('nl-NL', {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
 
 export class Puzzle {
   figures: Figure[];
@@ -65,30 +49,41 @@ export class Puzzle {
 
   possibleSolutionStarts: PossibleSolution[] = [];
   solutions: PossibleSolution[] = [];
-  nonSolutions: PossibleSolution[] = [];
 
   #uniqueSituations = new Set<string>();
+  // #maxMemoryUsageInGB = 2;
+  // #lastSkippedDuplicateSituations = 0;
 
   meta: {
     totalNumberOfPossibleCombinations: number;
     totalNumberOfTriedCombinations: number;
     returningMaxOneSolution?: boolean;
     skippedDuplicateSituations: number;
+    skippedImpossibleSituations: number;
     maxMemoryUsed: number;
+    reachedMaxMemory?: boolean;
+    calculationDuration: number;
   } = {
     totalNumberOfPossibleCombinations: 0,
     totalNumberOfTriedCombinations: 0,
     returningMaxOneSolution: false,
     skippedDuplicateSituations: 0,
+    skippedImpossibleSituations: 0,
     maxMemoryUsed: 0,
+    reachedMaxMemory: false,
+    calculationDuration: 0,
   };
 
-  perf: {
+  #perf: {
+    tStart: number;
+    tEnd: number | null;
     toEmptyGameBoardWithPuzzlePieceAt: number[];
     clone: number[];
     stack: number[];
     calculatedSameSituationBefore: number[];
   } = {
+    tStart: performance.now(),
+    tEnd: null,
     toEmptyGameBoardWithPuzzlePieceAt: [],
     clone: [],
     stack: [],
@@ -100,9 +95,12 @@ export class Puzzle {
     gameBoard: GridLike<number>;
     puzzlePieces: GridLike<number>[];
   }) {
-    this.figures = options.figures.map(
-      (name, index) => new Figure(name, index)
-    );
+    console.log('\nYum, a puzzle to chew on!');
+    // console.log('Figures:', options.figures);
+    // console.log('Game board:', options.gameBoard.toString());
+    // console.log('Puzzle pieces:', options.puzzlePieces.map(p => p.toString()));
+
+    this.figures = options.figures.map((name, index) => new Figure(name, index));
 
     this.figuresCount = this.figures.length;
 
@@ -281,7 +279,7 @@ export class Puzzle {
             }
           }
 
-          combination.sort((a, b) => a.id.localeCompare(b.id, lang));
+          combination.sort((a, b) => a.id.localeCompare(b.id, 'nl-NL'));
 
           cornerInfo.possiblePuzzlePieceCombinations!.push(combination);
         }
@@ -340,7 +338,7 @@ export class Puzzle {
         const part1 = getPartById(combinationCorner1, samePuzzlePieceId)!;
         const part2 = getPartById(combinationCorner2, samePuzzlePieceId)!;
 
-        if (!hasEqualPosition(part1, part2)) {
+        if (part1.position !== part2.position) {
           return false;
         }
       }
@@ -355,32 +353,6 @@ export class Puzzle {
       return arr1
         .filter((item1) => arr2.find((item2) => item2.id === item1.id))
         .map((item) => item.id);
-    }
-
-    function hasEqualPosition(
-      part1: PossiblePuzzlePieceCombinationPart | PossibleSolutionPart,
-      part2: PossiblePuzzlePieceCombinationPart | PossibleSolutionPart,
-    ) {
-      return part1.position === part2.position;
-    }
-
-    function possibleSolutionStartsEqual(
-      s1: PossibleSolution,
-      s2: PossibleSolution,
-    ) {
-      for (const [i, p1] of s1.entries()) {
-        const p2 = s2[i];
-
-        if (
-          !p2
-          || p1.id !== p2.id
-          || !hasEqualPosition(p1, p2)
-        ) {
-          return false;
-        }
-      }
-
-      return true;
     }
 
     for (const topLeft of this.cornersInfo!.topLeft.possiblePuzzlePieceCombinations!) {
@@ -449,7 +421,7 @@ export class Puzzle {
               continue;
             }
 
-            const possibleSolutionStart: PossibleSolution = [];
+            const possibleSolutionStart = new PossibleSolution(this.targetFigure.value);
 
             let missingRequiredPuzzlePieces = [...this.puzzlePiecesThatCannotAvoidAnyCorners];
 
@@ -459,11 +431,10 @@ export class Puzzle {
               missingRequiredPuzzlePieces = missingRequiredPuzzlePieces
                 .filter((p) => p !== part.id);
 
-              possibleSolutionStart.push({
+              possibleSolutionStart.add({
                 id: part.id,
                 position: part.position,
                 grid: puzzlePiece.toEmptyGameBoardWithPuzzlePieceAt(part.position),
-                partOfPossibleSolution: this.possibleSolutionStarts.length,
               });
             }
 
@@ -476,29 +447,24 @@ export class Puzzle {
               continue;
             }
 
-            possibleSolutionStart.sort((a, b) => a.id.localeCompare(b.id, lang));
+            possibleSolutionStart.sortAlphabetically();
 
-            if (
-              this.possibleSolutionStarts
-                .find((p) => possibleSolutionStartsEqual(possibleSolutionStart, p))
-            ) {
+            if (this.possibleSolutionStarts.find((other) => possibleSolutionStart.equals(other))) {
               console.log('Discarded possible solution start (duplicate)');
               continue;
             }
 
             let previousGameBoard = this.gameBoard;
 
-            for (const part of possibleSolutionStart) {
+            for (const part of possibleSolutionStart.parts) {
               part.before = previousGameBoard.clone();
-
               part.after = previousGameBoard.stack(this.figuresCount, part.grid);
-
               previousGameBoard = part.after;
             }
 
-            console.log('Added new possible solution start');
-
             this.possibleSolutionStarts.push(possibleSolutionStart);
+            console.log(`\nAdded new possible solution start (#${this.possibleSolutionStarts.length})`);
+            console.log(possibleSolutionStart.toString());
           }
         }
       }
@@ -506,33 +472,130 @@ export class Puzzle {
 
     // Sort possible solution starts by length of the array.
     // We want to brute force the possible solution starts that
-    // use the most pieces first.
-    this.possibleSolutionStarts.sort((a, b) => b.length - a.length);
+    // have the least amount of possible combinations first.
+    const puzzlePieces = Object.values(this.puzzlePieces);
+    this.possibleSolutionStarts.sort((a, b) => {
+      return a.getContinuationInfo(puzzlePieces).unusedPuzzlePiecesPossibleCombinations
+        - b.getContinuationInfo(puzzlePieces).unusedPuzzlePiecesPossibleCombinations;
+    });
+
+    for (const [index, possibleSolutionStart] of this.possibleSolutionStarts.entries()) {
+      possibleSolutionStart.solutionStartIndex = index;
+
+      for (const part of possibleSolutionStart.parts) {
+        part.partOfPossibleSolutionStart = index;
+      }
+    }
   }
 
   calculateProduct (arr: number[]) {
     return arr.reduce((acc, cur) => acc * cur, 1);
   }
 
-  #lastSkippedDuplicateSituations = 0;
+  resultlogSkippedSituations (final = false) {
+    const {
+      skippedDuplicateSituations: totalSkippedDuplicateSituations,
+      skippedImpossibleSituations: totalSkippedImpossibleSituations,
+    } = this.meta;
 
-  logSkippedDuplicateSituations () {
-    const { skippedDuplicateSituations: totalSkippedDuplicateSituations } = this.meta;
-    console.log('Skipped duplicate situations:', numberFormatter.format(totalSkippedDuplicateSituations - this.#lastSkippedDuplicateSituations));
-    console.log('Total skipped duplicate situations:', numberFormatter.format(totalSkippedDuplicateSituations));
-    this.#lastSkippedDuplicateSituations = totalSkippedDuplicateSituations;
+    if (final) {
+      console.log('Total skipped duplicate situations:', numberFormatter.format(totalSkippedDuplicateSituations));
+      console.log('Total skipped impossible situations:', numberFormatter.format(totalSkippedImpossibleSituations));
+      return;
+    }
+
+    // console.log('Skipped duplicate situations:', numberFormatter.format(totalSkippedDuplicateSituations - this.#lastSkippedDuplicateSituations));
+    console.log('Total skipped duplicate situations so far:', numberFormatter.format(totalSkippedDuplicateSituations));
+    console.log('Total skipped impossible situations so far:', numberFormatter.format(totalSkippedImpossibleSituations));
+    // this.#lastSkippedDuplicateSituations = totalSkippedDuplicateSituations;
   }
 
-  logMemoryUsage () {
-    const rss = process.memoryUsage.rss();
-    console.log('Current memory usage:', `${numberFormatter.format(Math.round(rss/1000000))} MB`);
+  /**
+   * @returns The current memory usage in bytes.
+   */
+  getMemoryUsage () {
+    const memory = process.memoryUsage.rss();
 
-    if (rss > this.meta.maxMemoryUsed) {
-      this.meta.maxMemoryUsed = rss;
+    if (memory > this.meta.maxMemoryUsed) {
+      this.meta.maxMemoryUsed = memory;
+    }
+
+    // B -> kB -> MB
+    return memory;
+  }
+
+  memoryToString (memory: number) {
+    memory /= 1024 ** 2;
+    const unit = memory > 1024 ? 'GB' : 'MB';
+    return `${numberFormatter.format(unit === 'GB' ? memory / 1024 : memory)} ${unit}`;
+  }
+
+  /**
+   * @returns The current memory usage in MB.
+   */
+  logMemoryUsage () {
+    const memory = this.getMemoryUsage();
+    console.log('Current memory usage:', this.memoryToString(memory));
+    return memory;
+  }
+
+  async checkMemoryUsage () {
+    this.logMemoryUsage();
+
+    // const memory = this.logMemoryUsage();
+    // if ((memory / 1024) > this.#maxMemoryUsageInGB) {
+    //   console.log(`Memory usage is over ${this.#maxMemoryUsageInGB} GB, clearing up space first`);
+
+    //   const { reachedMaxMemory: reachedMaxMemoryBefore } = this.meta;
+
+    //   if (!reachedMaxMemoryBefore) {
+    //     console.log(heapStats());
+    //     // await Bun.write('heap-before-clear.json', JSON.stringify(generateHeapSnapshot(), null, 2));
+    //   }
+
+    //   this.meta.reachedMaxMemory = true;
+    //   Bun.gc(true);
+    //   this.logMemoryUsage();
+
+    //   if (!reachedMaxMemoryBefore) {
+    //     console.log(heapStats());
+    //     // await Bun.write('heap-after-clear.json', JSON.stringify(generateHeapSnapshot(), null, 2));
+    //     process.exit(1);
+    //   }
+    // }
+  }
+
+  milliSecondsToString (ms: number) {
+    // Log seconds, minutes or hours depending on the duration
+    if (ms < 1000) {
+      return `${numberFormatter.format(ms)} milliseconds`;
+    }
+    else if (ms < 60_000) {
+      return `${numberFormatter.format(ms / 1000)} seconds`;
+    }
+    else if (ms < 3_600_000) {
+      return `${numberFormatter.format(ms / 60_000)} minutes`;
+    }
+    else {
+      return `${numberFormatter.format(ms / 3_600_000)} hours`;
     }
   }
 
-  async bruteForceSolution ({
+  /**
+   * Delay everything that follows this function until the next tick.
+   * This allows Node/Bun to garbage collect and let the event loop run.
+   */
+  async nextTick () {
+    // When using Node:
+    // Wait for Node's next tick to allow other code to run and console.logs to show.
+    // await new Promise((resolve) => setImmediate(resolve));
+
+    // When using Bun:
+    // NOTE: Big nope, this slows down everything a LOT. Maybe only do this if memory > x?
+    // Bun.gc(false);
+  }
+
+  async *bruteForceSolution ({
     possibleSolutionStarts = this.possibleSolutionStarts,
     from = 0,
     to,
@@ -540,7 +603,7 @@ export class Puzzle {
     possibleSolutionStarts?: PossibleSolution[];
     from?: number;
     to?: number;
-  } = {}) {
+  } = {}): AsyncGenerator<boolean> {
     // Brute force solutions for every "possible solution start"
     const possibleSolutionStartsCount = possibleSolutionStarts.length;
     const puzzlePieces = Object.values(this.puzzlePieces);
@@ -548,83 +611,87 @@ export class Puzzle {
     const iEnd = Math.min(to ?? possibleSolutionStartsCount, possibleSolutionStartsCount);
 
     for (let i = from; i < iEnd; i++) {
+      console.log('\nNumber of tried combinations so far:', numberFormatter.format(this.meta.totalNumberOfTriedCombinations));
+      this.resultlogSkippedSituations();
+      await this.checkMemoryUsage();
+
       const possibleSolutionStart = possibleSolutionStarts[i];
-      const unusedPuzzlePieces = puzzlePieces.filter((p1) => !possibleSolutionStart.find((p2) => p1.id === p2.id));
-      const unusedPuzzlePiecesCount = unusedPuzzlePieces.length;
 
-      const puzzlePiecesPlacementOptions: PuzzlePiecePlacementOptions[] =
-        unusedPuzzlePieces.map((puzzlePiece) => ({
-          puzzlePiece,
-          possiblePositions: puzzlePiece.possiblePositionsWhereCornersNotAffected,
-        }));
+      const {
+        unusedPuzzlePiecesPlacementOptions,
+        unusedPuzzlePiecesCount,
+        unusedPuzzlePiecesPossibleCombinations,
+      } = possibleSolutionStart.getContinuationInfo(puzzlePieces);
 
-      console.log(`\nBrute forcing from possible solution start #${i + 1}/${possibleSolutionStartsCount} with ${unusedPuzzlePiecesCount} unused puzzle pieces (${numberFormatter.format(this.calculateProduct(puzzlePiecesPlacementOptions.map(p => p.possiblePositions.length)))} options).`);
-      this.logMemoryUsage();
+      console.log(`\nBrute forcing from possible solution start #${i + 1}/${possibleSolutionStartsCount} (${numberFormatter.format(unusedPuzzlePiecesPossibleCombinations)} possible combinations)`);
+      console.log('Unused puzzle pieces:', unusedPuzzlePiecesCount === 0 ? '-' : `${unusedPuzzlePiecesCount} (${unusedPuzzlePiecesPlacementOptions.map(p => p.puzzlePiece.id).join(', ')})`);
 
       // If possible solution consist of no possible solution parts,
       // the solution is: do nothing. In that case, the grid after all changes
       // is the original game board.
-      const gameBoardSoFar = possibleSolutionStart.at(-1)?.after ?? this.gameBoard;
-
+      const gameBoardSoFar = possibleSolutionStart.finalGameBoard ?? this.gameBoard;
       gameBoardSoFar.checkIsSolution(this.targetFigure.value);
 
-      // console.log('Grid so far:', gridSoFar.toString());
+      console.log('Game board so far:', gameBoardSoFar.toString());
 
       if (!unusedPuzzlePiecesCount) {
         console.log('No unused puzzle pieces, checking if we reached a solution already');
 
         if (gameBoardSoFar.isSolution) {
           console.log('Found solution!');
+          console.log(possibleSolutionStart.toString());
           this.meta.totalNumberOfTriedCombinations++;
           this.solutions.push(possibleSolutionStart);
+
+          // this.resultlogSkippedSituations();
+          yield true;
 
           if (this.meta.returningMaxOneSolution) {
             console.log('Returning max one solution, stopping the brute force');
             return;
           }
 
-          this.logSkippedDuplicateSituations();
           continue;
         }
 
         console.log('No solutions found for this possible solution start');
-        this.logSkippedDuplicateSituations();
+        // this.resultlogSkippedSituations();
+        yield false;
         continue;
       }
 
       const gameBoard = gameBoardSoFar.clone();
 
-      const abort = this.calculatedSameSituationBefore(puzzlePiecesPlacementOptions.map(p => p.puzzlePiece), gameBoard);
+      const shouldAbort = this.calculatedSameSituationBefore(unusedPuzzlePiecesPlacementOptions.map(p => p.puzzlePiece), gameBoard);
 
-      if (abort) {
-        const skippedSituations = this.calculateProduct(puzzlePiecesPlacementOptions.map(p => p.possiblePositions.length));
-        console.log(`Had the same grid with the same unused puzzle pieces before, skipping this entire possible solution start (${skippedSituations} possible situations skipped).`);
-        this.meta.skippedDuplicateSituations += skippedSituations;
-        this.logSkippedDuplicateSituations();
+      if (shouldAbort) {
+        console.log(`Had the same grid with the same unused puzzle pieces before, skipping this entire possible solution start.`);
+        this.meta.skippedDuplicateSituations += unusedPuzzlePiecesPossibleCombinations;
+        // this.resultlogSkippedSituations();
+        yield false;
         continue;
       }
 
-      const currentPuzzlePiecePlacementOptions = puzzlePiecesPlacementOptions.shift()!;
+      const currentPuzzlePiecePlacementOptions = unusedPuzzlePiecesPlacementOptions.shift()!;
+
+      // const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
       for (const possibleSolution of this.puzzlePiecePlacementOptionsIterator({
         gameBoard,
         baseSolution: possibleSolutionStart,
         current: currentPuzzlePiecePlacementOptions,
-        next: puzzlePiecesPlacementOptions,
+        next: unusedPuzzlePiecesPlacementOptions,
       })) {
-        // Wait for Node's next tick to allow other code to run and console.logs to show.
-        await new Promise((resolve) => setImmediate(resolve));
+        // await this.nextTick();
+        // await wait(1000);
 
         this.meta.totalNumberOfTriedCombinations++;
 
-        // Use last entry of solution '.after' grid to check if solution passes.
-        const resultGameBoard = possibleSolution.at(-1)!.after!;
-
-        resultGameBoard.checkIsSolution(this.targetFigure.value);
-
-        if (resultGameBoard.isSolution) {
+        if (possibleSolution.isSolution()) {
           console.log('Found solution!');
+          console.log(possibleSolution.toString());
           this.solutions.push(possibleSolution);
+          yield true;
 
           if (this.meta.returningMaxOneSolution) {
             console.log('Returning max one solution, stopping.');
@@ -633,15 +700,17 @@ export class Puzzle {
 
           continue;
         }
-
-        // this.nonSolutions.push(possibleSolution);
-        // console.log('Calculated result is not the completed puzzle.');
       }
 
-      this.logSkippedDuplicateSituations();
+      // this.resultlogSkippedSituations();
     }
 
-    console.log('\nTotal number of tried combinations:', numberFormatter.format(this.meta.totalNumberOfTriedCombinations));
+    this.saveCalculationDuration();
+    console.log('\n-----------------------------------');
+    console.log('Total number of tried combinations:', numberFormatter.format(this.meta.totalNumberOfTriedCombinations));
+    this.resultlogSkippedSituations(true);
+    console.log('Total time to calculate solution:', this.milliSecondsToString(this.meta.calculationDuration));
+    console.log('Max memory used:', this.memoryToString(this.meta.maxMemoryUsed));
 
     // type PerfType = keyof typeof this.perf;
     // const loggedPerfTypes: PerfType[] = [
@@ -662,9 +731,16 @@ export class Puzzle {
   /**
    * Indicates whether we ran into this exact situation before, so
    * with the same game board grid and the same puzzle pieces left.
+   *
+   * NOTE: Don't use this during the brute force, as saving every
+   * situation takes up so much memory, that the script will just
+   * crash at some point.
    */
   calculatedSameSituationBefore (puzzlePieces: PuzzlePiece[], gameBoard: GameBoard): boolean {
-    const key = `${puzzlePieces.map(p => p.id).join('-') || '<none>'}_${JSON.stringify(gameBoard.data)}`;
+    // IDEA: Represent every puzzle piece using a binary code. The number of bits should be equal to the number of puzzle pieces.
+    // Then we can create a bitmask that represents which puzzle pieces have been used and which ones haven't.
+
+    const key = `${puzzlePieces.map(p => p.id).join('')}${gameBoard.toShortString()}`;
 
     if (this.#uniqueSituations.has(key)) {
       return true;
@@ -688,6 +764,8 @@ export class Puzzle {
     const { puzzlePiece, possiblePositions } = current;
     const possiblePositionCount = possiblePositions.length;
 
+    // console.log('Now trying multiple placements of puzzle piece:', puzzlePiece.id);
+
     for (let i = 0; i < possiblePositionCount; i++) {
       // const p0 = performance.now();
 
@@ -701,7 +779,7 @@ export class Puzzle {
       const after = gameBoard.stack(this.figuresCount, grid);
       // const p3 = performance.now();
 
-      const abort = this.calculatedSameSituationBefore(next.map(p => p.puzzlePiece), after);
+      // const shouldAbort = this.calculatedSameSituationBefore(next.map(p => p.puzzlePiece), after);
       // const p4 = performance.now();
 
       // this.perf.toEmptyGameBoardWithPuzzlePieceAt.push(p1 - p0);
@@ -709,13 +787,12 @@ export class Puzzle {
       // this.perf.stack.push(p3 - p2);
       // this.perf.calculatedSameSituationBefore.push(p4 - p3);
 
-      if (abort) {
-        this.meta.skippedDuplicateSituations += this.calculateProduct(next.map(p => p.possiblePositions.length));
-        continue;
-      }
+      // if (shouldAbort) {
+      //   this.meta.skippedDuplicateSituations += this.calculateProduct(next.map(p => p.possiblePositions.length));
+      //   continue;
+      // }
 
-      const result: PossibleSolution = [
-        ...baseSolution,
+      const result = baseSolution.cloneWith([
         {
           id: puzzlePiece.id,
           position,
@@ -723,10 +800,55 @@ export class Puzzle {
           before,
           after,
         },
-      ];
+      ]);
 
+      const afterCorrectCellsCount = after.countValue(this.targetFigure.value);
+      const afterIncorrectCellsCount = after.cells - afterCorrectCellsCount;
+      const nextLevelsMaxInfluencedCells = next.reduce((acc, p) => acc + p.puzzlePiece.cellsInfluenced, 0);
+      const canBeSolvedFromHereOn = afterIncorrectCellsCount <= nextLevelsMaxInfluencedCells;
+
+      if (!canBeSolvedFromHereOn) {
+        // console.log(`Placed puzzle piece ${puzzlePiece.id} at ${position}, but unsolvable situation found:`, {
+        //   afterCorrectCellsCount,
+        //   afterIncorrectCellsCount,
+        //   nextLevelsMaxInfluencedCells,
+        //   canBeSolvedFromHereOn,
+        // });
+
+        this.meta.skippedImpossibleSituations += next.length;
+        continue;
+      }
+
+      // If there are more levels, proceed to the next level, yield that
+      // level's result and continue with the next possible position of
+      // the current puzzle piece.
       if (next.length) {
         const [newCurrent, ...newNext] = next;
+
+        // console.log('Going a level deeper into puzzle piece:', newCurrent.puzzlePiece.id, {
+        //   next: newNext.map(p => ({
+        //     id: p.puzzlePiece.id,
+        //     possiblePositions: p.possiblePositions.length,
+        //   })),
+        // });
+
+        // TODO: REVIEW: I have no idea what I'm doing. Can't grasp how the recursion here works and if this is the right place to do this.
+        // TODO: Also, this can be more generic. Calculate the number of cells that all next puzzle pieces combined can influence. If that number is less than the number of incorrect cells, skip <insert-whatever-the-fuck-we-have-to-skip>.
+        // If only one puzzle piece is left, we can check if the game board
+        // could still be solved with the remaining puzzle piece and skip
+        // iterating further if it's impossible.
+        // if (newNext.length === 1) {
+        //   const afterIncorrectCellsCount = after.cells - after.countValue(this.targetFigure.value);
+
+        //   if (afterIncorrectCellsCount > newNext[0].puzzlePiece.cellsInfluenced) {
+        //     // console.log({
+        //     //   afterIncorrectCellsCount,
+        //     //   newNextLevelPuzzlePieceCellsInfluenced: newNext[0].puzzlePiece.cellsInfluenced,
+        //     // });
+        //     this.meta.skippedImpossibleSituations += newNext[0].possiblePositions.length;
+        //     continue;
+        //   }
+        // }
 
         // NOTE: It might be possible to replace this with `yield* this.puzzlePiecePlacementOptionsIterator({...})`.
         // See: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/yield*
@@ -739,10 +861,20 @@ export class Puzzle {
           yield nestedResult;
         }
 
+        // console.log(`Tried all placements of puzzle piece ${newCurrent.puzzlePiece.id} with this placement of puzzle piece ${puzzlePiece.id}`);
+
+        // Prevent yielding the result of the current level, while we
+        // still have deeper levels to go through.
         continue;
       }
 
+      // Only on the final level, yield the result up all the way to the top.
       yield result;
     }
+  }
+
+  saveCalculationDuration () {
+    this.#perf.tEnd = performance.now();
+    this.meta.calculationDuration = this.#perf.tEnd - this.#perf.tStart;
   }
 }

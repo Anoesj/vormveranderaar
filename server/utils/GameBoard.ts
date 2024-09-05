@@ -34,7 +34,12 @@ export class GameBoard extends Grid {
     return this.construct(rows);
   }
 
-  checkIsSolution (value: number) {
-    this.isSolution = this.everyValueIs(value);
+  checkIsSolution (targetValue: number) {
+    this.isSolution = this.everyValueIs(targetValue);
+    return this.isSolution;
+  }
+
+  toShortString () {
+    return this.data.map(row => row.join('')).join('');
   }
 }

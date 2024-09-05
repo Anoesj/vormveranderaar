@@ -4,11 +4,13 @@ export class Grid {
   data: GridLike<number>;
   rows: number;
   cols: number;
+  cells: number;
 
   constructor (grid: GridLike<number>) {
     this.data = grid;
     this.rows = this.#rowsCount;
     this.cols = this.#colsCount;
+    this.cells = this.rows * this.cols;
   }
 
   /**
@@ -59,8 +61,17 @@ export class Grid {
     return this.get(-1, -1)!;
   }
 
+  countValue (value: number) {
+    // TODO: Check performance, maybe convert to classic for.
+    return this.data
+      .flat()
+      .reduce((acc, cur) => acc + (cur === value ? 1 : 0), 0);
+  }
+
   everyValueIs (value: number) {
-    return this.data.every((row) => row.every((colVal) => colVal === value));
+    return this.data.every(
+      (row) => row.every((colVal) => colVal === value)
+    );
   }
 
   toString () {
@@ -72,19 +83,16 @@ export class Grid {
       rows,
     } = this;
 
-    const lastColIndex = cols - 1;
-
     for (let rowIndex = 0; rowIndex < rows; rowIndex++) {
       str += '\n';
       for (let colIndex = 0; colIndex < cols; colIndex++) {
-        if (colIndex > 0 && colIndex !== lastColIndex) {
+        if (colIndex > 0) {
           str += ',';
         }
+
         str += String(data[rowIndex][colIndex]).padStart(3, ' ');
       }
     }
-
-    str += '\n';
 
     return str;
   }
