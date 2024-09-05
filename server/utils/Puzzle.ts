@@ -486,6 +486,10 @@ export class Puzzle {
         part.partOfPossibleSolutionStart = index;
       }
     }
+
+    if (this.possibleSolutionStarts.length > 500) {
+      this.meta.returningMaxOneSolution = true;
+    }
   }
 
   calculateProduct (arr: number[]) {

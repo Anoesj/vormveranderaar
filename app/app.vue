@@ -4,6 +4,11 @@
     <button v-else @click="cancel">Cancel</button>
     <button @click="print">Print</button>
 
+    <div>
+      <p>Enter Neopets HTML:</p>
+      <textarea @paste="parseHtml"></textarea>
+    </div>
+
     <h1>{{ !result ? 'Click calculate to get started' : pending ? 'Loading results...' : 'Results' }}</h1>
 
     <div v-if="result" :key="resultHash">
@@ -43,24 +48,27 @@
         </div>
       </details>
 
-      <details>
+      <details @toggle="showPossibleSolutionStarts = $event.newState">
         <summary>
           <h2>
             Phase 1: possible solution starts based on correct corner outputs ({{ result.possibleSolutionStarts.length }})
           </h2>
         </summary>
-        <p v-if="!result.possibleSolutionStarts.length">
-          No solutions for corners possible.
-        </p>
-        <template v-else>
-          <PossibleSolutionStart
-            v-for="(possibleSolutionStart, index) of result.possibleSolutionStarts"
-            :key="index"
-            :nth="index + 1"
-            :possibleSolutionStart="possibleSolutionStart"
-            :totalPuzzlePiecesCount="Object.keys(result.puzzlePieces).length"
-            :numberFormatter="numberFormatter"
-          />
+
+        <template v-if="showPossibleSolutionStarts">
+          <p v-if="!result.possibleSolutionStarts.length">
+            No solutions for corners possible.
+          </p>
+          <template v-else>
+            <PossibleSolutionStart
+              v-for="(possibleSolutionStart, index) of result.possibleSolutionStarts"
+              :key="index"
+              :nth="index + 1"
+              :possibleSolutionStart="possibleSolutionStart"
+              :totalPuzzlePiecesCount="Object.keys(result.puzzlePieces).length"
+              :numberFormatter="numberFormatter"
+            />
+          </template>
         </template>
       </details>
 
@@ -78,52 +86,13 @@
           />
         </template>
       </details>
-
-      <!-- <details>
-        <summary>
-          <h2>
-            Debug: non-solutions ({{ result.nonSolutions.length }})
-          </h2>
-        </summary>
-
-        <p v-if="!result.nonSolutions.length">-</p>
-        <template
-          v-else
-          v-for="(nonSolution, index) of result.nonSolutions"
-        >
-          <h3>#{{ index + 1 }}</h3>
-          <h4>Puzzle pieces</h4>
-          <template v-for="part of nonSolution">
-            <h5>
-              {{ part.id }}{{
-                part.partOfPossibleSolutionStart !== undefined
-                  ? ` (part of possible solution start #${part.partOfPossibleSolutionStart + 1})`
-                  : ''
-              }}
-            </h5>
-
-            <div class="f">
-              <Grid :grid="part.before!" />
-              ➕
-              <Grid :grid="part.grid" isPuzzlePieceGrid />
-              🟰
-              <Grid :grid="part.before!" />
-              <span style="font-size: 1.5rem; margin-left: 0.5rem">❌</span>
-            </div>
-          </template>
-        </template>
-      </details> -->
-
-      <!-- <details>
-        <summary><h2>Debug: original data</h2></summary>
-        <pre>{{ result }}</pre>
-      </details> -->
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import type { Puzzle } from '#build/types/nitro-imports';
+import type { PuzzleOptions } from '~~/server/utils/PuzzleLibrary';
 
 // import { useLocalStorage } from '@vueuse/core';
 
@@ -143,6 +112,10 @@ const numberFormatter = new Intl.NumberFormat(lang, {
   minimumFractionDigits: 0,
   maximumFractionDigits: 2,
 });
+
+const showPossibleSolutionStarts = ref(false);
+
+const puzzleOptions = ref<PuzzleOptions>();
 
 function formatDuration (ms: number) {
   // Log seconds, minutes or hours depending on the duration
@@ -168,6 +141,74 @@ function formatMemory (memory: number) {
   return `${numberFormatter.format(unit === 'GB' ? memory / 1024 : memory)} ${unit}`;
 }
 
+function parseHtml (event: ClipboardEvent) {
+  const parser = new DOMParser;
+  const html = event.clipboardData?.getData('text/plain');
+
+  if (!html) {
+    console.log('No HTML found in clipboard');
+    return;
+  }
+
+  const parsed = parser.parseFromString(html, 'text/html');
+
+  const figuresTable = parsed.querySelector('table[border="1"]');
+
+  if (!figuresTable) {
+    console.log('No figures table found');
+    return;
+  }
+
+  const figures = Array.from(figuresTable.querySelectorAll('img'))
+    .map(img => img.src.split('/').at(-1)!.split('.gif').at(0)!)
+    .filter(name => name !== 'arrow');
+
+  // Remove last
+  figures.pop();
+
+  const targetFigure = figures.at(-1);
+
+  console.log('Figures:', figures);
+  console.log('Target figure:', targetFigure);
+
+  const gameBoard = Array.from(parsed.querySelector('#content .content table')!.querySelectorAll('tr')!)
+    .map(tr => Array.from(tr.querySelectorAll('td')!)
+      .map(td => {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-asserted-optional-chain
+        const figure = td.querySelector('img')?.src.split('/').at(-1)!.split('.gif').at(0)!;
+        return figures.indexOf(figure);
+      })
+    );
+
+  console.log('Game board:', gameBoard);
+
+  const puzzlePieces = Array.from(parsed.querySelectorAll('table[cellpadding="15"] > tbody > tr > td'))
+    .map(td => {
+      // An empty cell's td has attribute height="10"
+      // A filled cell has no properties
+      // Empty cell should become 0
+      // Filled cell should become 1
+      return Array.from(td.querySelectorAll('tr'))
+        .map(tr => Array.from(tr.querySelectorAll('td'))
+          .map(td => td.hasAttribute('height') ? 0 : 1)
+        );
+    });
+
+  console.log('Puzzle pieces:', puzzlePieces);
+
+  // for (const table of allTables) {
+  //   console.log(table.border);
+  // }
+
+  puzzleOptions.value = {
+    figures,
+    gameBoard,
+    puzzlePieces,
+  };
+
+  calculate();
+}
+
 let controller: AbortController;
 
 async function calculate () {
@@ -180,10 +221,12 @@ async function calculate () {
   });
 
   const res = await $fetch('/api/calculate-solutions', {
+    method: 'POST',
     timeout: 0,
     retry: 0,
     retryDelay: 0,
     signal: controller.signal,
+    body: puzzleOptions.value,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   }) as any;
 
