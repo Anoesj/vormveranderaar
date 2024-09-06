@@ -166,4 +166,10 @@ export class PuzzlePiece {
 
     return positions;
   }
+
+  getPossiblePositions (avoidCorners: boolean) {
+    return avoidCorners
+      ? this.possiblePositionsWhereCornersNotAffected
+      : this.possiblePositions;
+  }
 }

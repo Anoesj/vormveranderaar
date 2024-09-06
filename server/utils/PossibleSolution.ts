@@ -83,7 +83,7 @@ export class PossibleSolution {
     this.parts.sort((a, b) => a.id.localeCompare(b.id, 'nl-NL'));
   }
 
-  getContinuationInfo (puzzlePieces: PuzzlePiece[]) {
+  getContinuationInfo (puzzlePieces: PuzzlePiece[], avoidCorners: boolean) {
     const unusedPuzzlePieces = puzzlePieces.filter((puzzlePiece) => !this.parts.find((part) => puzzlePiece.id === part.id));
 
     // Sort by how much they influence the game board (more influence comes first).
@@ -94,7 +94,7 @@ export class PossibleSolution {
     const unusedPuzzlePiecesPlacementOptions: PuzzlePiecePlacementOptions[] =
       unusedPuzzlePieces.map((puzzlePiece) => ({
         puzzlePiece,
-        possiblePositions: puzzlePiece.possiblePositionsWhereCornersNotAffected,
+        possiblePositions: puzzlePiece.getPossiblePositions(avoidCorners),
       }));
 
     const unusedPuzzlePiecesPossibleCombinations = MathHelper.product(unusedPuzzlePiecesPlacementOptions.map(p => p.possiblePositions.length));

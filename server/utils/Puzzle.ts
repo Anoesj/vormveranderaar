@@ -55,11 +55,12 @@ export class Puzzle {
   #uniqueSituations = new Set<string>();
   // #maxMemoryUsageInGB = 2;
   // #lastSkippedDuplicateSituations = 0;
-  #preparedSolutionStarts = false;
+  #hasPreparedSolutionStarts = false;
 
   meta: {
     totalNumberOfPossibleCombinations: number;
     totalNumberOfTriedCombinations: number;
+    totalNumberOfIteratorPlacementAttempts: number;
     returningMaxOneSolution?: boolean;
     skippedDuplicateSituations: number;
     skippedImpossibleSituations: number;
@@ -69,6 +70,7 @@ export class Puzzle {
   } = {
     totalNumberOfPossibleCombinations: 0,
     totalNumberOfTriedCombinations: 0,
+    totalNumberOfIteratorPlacementAttempts: 0,
     returningMaxOneSolution: false,
     skippedDuplicateSituations: 0,
     skippedImpossibleSituations: 0,
@@ -385,14 +387,16 @@ export class Puzzle {
       }
     }
 
+    const puzzlePieces = Object.values(this.puzzlePieces);
+    for (const possibleSolutionStart of this.possibleSolutionStarts) {
+      possibleSolutionStart.getContinuationInfo(puzzlePieces, true);
+    }
+
     // Sort possible solution starts by length of the array.
     // We want to brute force the possible solution starts that
     // have the least amount of possible combinations first.
-    const puzzlePieces = Object.values(this.puzzlePieces);
-    this.possibleSolutionStarts.sort((a, b) => {
-      return a.getContinuationInfo(puzzlePieces).unusedPuzzlePiecesPossibleCombinations
-        - b.getContinuationInfo(puzzlePieces).unusedPuzzlePiecesPossibleCombinations;
-    });
+    this.possibleSolutionStarts.sort((a, b) => a.continuationInfo!.unusedPuzzlePiecesPossibleCombinations
+      - b.continuationInfo!.unusedPuzzlePiecesPossibleCombinations);
 
     // We need to add the index after the sorting.
     for (const [index, possibleSolutionStart] of this.possibleSolutionStarts.entries()) {
@@ -407,7 +411,7 @@ export class Puzzle {
       this.meta.returningMaxOneSolution = true;
     }
 
-    this.#preparedSolutionStarts = true;
+    this.#hasPreparedSolutionStarts = true;
     this.#timings.tPrepareSolutionStartsEnd = performance.now();
 
     console.log(`\nPrepared ${this.possibleSolutionStarts.length} possible solution starts.`);
@@ -427,8 +431,10 @@ export class Puzzle {
 
     // This allows us to skip preparing the possible solution starts
     // if that's more feasible performance-wise.
-    if (!this.#preparedSolutionStarts) {
-      this.possibleSolutionStarts.push(new PossibleSolution(this.targetFigure.value));
+    if (!this.#hasPreparedSolutionStarts) {
+      const blankSolutionStart = new PossibleSolution(this.targetFigure.value)
+      blankSolutionStart.solutionStartIndex = 0;
+      this.possibleSolutionStarts.push(blankSolutionStart);
     }
 
     // Brute force solutions for every "possible solution start"
@@ -448,7 +454,7 @@ export class Puzzle {
         unusedPuzzlePiecesPlacementOptions,
         unusedPuzzlePiecesCount,
         unusedPuzzlePiecesPossibleCombinations,
-      } = possibleSolutionStart.getContinuationInfo(puzzlePieces);
+      } = possibleSolutionStart.getContinuationInfo(puzzlePieces, this.#hasPreparedSolutionStarts);
 
       console.log(`\nBrute forcing from possible solution start #${i + 1}/${possibleSolutionStartsCount} (${numberFormatter.format(unusedPuzzlePiecesPossibleCombinations)} possible combinations)`);
       this.#maybeLog(() => console.log('Unused puzzle pieces:', unusedPuzzlePiecesCount === 0 ? '-' : `${unusedPuzzlePiecesCount} (${unusedPuzzlePiecesPlacementOptions.map(p => p.puzzlePiece.id).join(', ')})`));
@@ -540,6 +546,7 @@ export class Puzzle {
     this.#saveCalculationDuration();
     console.log('\n-----------------------------------');
     console.log('Total number of tried combinations:', numberFormatter.format(this.meta.totalNumberOfTriedCombinations));
+    console.log('Total number of iterator placement attempts:', numberFormatter.format(this.meta.totalNumberOfIteratorPlacementAttempts));
     this.#logSkippedSituations(true);
     this.#logTimeToPrepareSolutionStarts();
     this.#logTimeToBruteForce();
@@ -569,9 +576,9 @@ export class Puzzle {
   }
 
   #logTimeToPrepareSolutionStarts () {
-    if (this.#preparedSolutionStarts) {
-      console.log('Time to prepare possible solution starts:', this.#milliSecondsToString(this.#timings.tPrepareSolutionStartsEnd! - this.#timings.tPrepareSolutionStartsStart!));
-    }
+    console.log('Time to prepare possible solution starts:', this.#hasPreparedSolutionStarts
+        ? this.#milliSecondsToString(this.#timings.tPrepareSolutionStartsEnd! - this.#timings.tPrepareSolutionStartsStart!)
+        : 'n/a');
   }
 
   #logTimeToBruteForce () {
@@ -592,9 +599,9 @@ export class Puzzle {
     const { puzzlePiece, possiblePositions } = current;
     const possiblePositionCount = possiblePositions.length;
 
-    // console.log('Now trying multiple placements of puzzle piece:', puzzlePiece.id);
-
     for (let i = 0; i < possiblePositionCount; i++) {
+      this.meta.totalNumberOfIteratorPlacementAttempts++;
+
       // const p0 = performance.now();
 
       const position = possiblePositions[i]!;
@@ -621,8 +628,36 @@ export class Puzzle {
       //   continue;
       // }
 
-      const p5 = performance.now();
+      // const p5 = performance.now();
+      const afterCorrectCellsCount = after.countValue(this.targetFigure.value);
+      const afterIncorrectCellsCount = after.cells - afterCorrectCellsCount;
+      // const p6 = performance.now();
+      // TODO: Try to rewrite to classic for
+      const nextPuzzlePiecesMaxInfluencedCells = next.reduce(this.#puzzlePieceCellsInfluencedReducer, 0);
+      // const p7 = performance.now();
+      const canBeSolvedFromHereOn = afterIncorrectCellsCount <= nextPuzzlePiecesMaxInfluencedCells;
 
+      // this.#perf.countIncorrectCells.push(p6 - p5);
+      // this.#perf.getNextPuzzlePiecesMaxInfluencedCells.push(p7 - p6);
+
+      const nextLength = next.length;
+
+      if (!canBeSolvedFromHereOn) {
+        // const skipped = next.reduce((acc, p) => acc * p.puzzlePiece.getPossiblePositions(this.#hasPreparedSolutionStarts).length, 1);
+
+        // If at the final level, we skip 1 impossible situation.
+        // If at any level before that, we skip all impossible situations.
+        let skipped = 1;
+        for (let i = 0; i < nextLength; i++) {
+          skipped *= next[i]!.puzzlePiece.getPossiblePositions(this.#hasPreparedSolutionStarts).length;
+        }
+
+        this.meta.skippedImpossibleSituations += skipped;
+
+        continue;
+      }
+
+      // const p8 = performance.now();
       const result = baseSolution.cloneWith([
         {
           id: puzzlePiece.id,
@@ -633,28 +668,15 @@ export class Puzzle {
         },
       ]);
 
-      const p6 = performance.now();
-      const afterCorrectCellsCount = after.countValue(this.targetFigure.value);
-      const afterIncorrectCellsCount = after.cells - afterCorrectCellsCount;
-      const p7 = performance.now();
-      const nextPuzzlePiecesMaxInfluencedCells = next.reduce((acc, p) => acc + p.puzzlePiece.cellsInfluenced, 0);
-      const p8 = performance.now();
-      const canBeSolvedFromHereOn = afterIncorrectCellsCount <= nextPuzzlePiecesMaxInfluencedCells;
-
-      this.#perf.possibleSolutionClone.push(p6 - p5);
-      this.#perf.countIncorrectCells.push(p7 - p6);
-      this.#perf.getNextPuzzlePiecesMaxInfluencedCells.push(p8 - p7);
-
-      if (!canBeSolvedFromHereOn) {
-        this.meta.skippedImpossibleSituations += next.length;
-        continue;
-      }
+      // const p9 = performance.now();
+      // this.#perf.possibleSolutionClone.push(p9 - p8);
 
       // If there are more levels, proceed to the next level, yield that
       // level's result and continue with the next possible position of
       // the current puzzle piece.
-      if (next.length) {
-        const [newCurrent, ...newNext] = next;
+      if (nextLength) {
+        const newCurrent = next[0];
+        const newNext = next.slice(1);
 
         // Let another iterator yield for us. This "iterator recursion"
         // will be repeated until we reach the final level.
@@ -673,6 +695,10 @@ export class Puzzle {
       // Only on the final level, yield the result up all the way to the top.
       yield result;
     }
+  }
+
+  #puzzlePieceCellsInfluencedReducer (acc: number, p: PuzzlePiecePlacementOptions) {
+    return acc + p.puzzlePiece.cellsInfluenced;
   }
 
   /**
