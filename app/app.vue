@@ -22,8 +22,8 @@
       <p>🧠 <strong>{{ formatMemory(result.meta.maxMemoryUsed) }}</strong> max memory used</p>
       <br>
       <p><strong>{{ numberFormatter.format(result.meta.totalNumberOfPossibleCombinations) }}</strong> possible puzzle piece combinations in total</p>
-      <p><strong>{{ numberFormatter.format(result.meta.totalNumberOfTriedCombinations) }}</strong> puzzle piece combinations tried</p>
       <p><strong>{{ numberFormatter.format(result.meta.totalNumberOfIteratorPlacementAttempts) }}</strong> puzzle piece placement attempts</p>
+      <p><strong>{{ numberFormatter.format(result.meta.totalNumberOfTriedCombinations) }}</strong> puzzle piece combinations tested for validity</p>
       <p><strong>{{ numberFormatter.format(result.meta.skippedDuplicateSituations) }}</strong> combinations skipped due to duplicate situations</p>
       <p><strong>{{ numberFormatter.format(result.meta.skippedImpossibleSituations) }}</strong> combinations skipped due to impossible situations</p>
 
@@ -110,24 +110,7 @@ const error = ref<string>();
 const showPossibleSolutionStarts = ref(false);
 
 const puzzleOptions = ref<PuzzleOptions>();
-
-const puzzleOptionsStringified = computed(() => {
-  if (!puzzleOptions.value) return '';
-
-  const { figures, gameBoard, puzzlePieces } = puzzleOptions.value;
-
-  return `{
-  figures: ${JSON.stringify(figures).replaceAll('"', "'")},
-  gameBoard: [
-    ${gameBoard.map(row => `[${row.join(', ')}]`).join(',\n    ')},
-  ],
-  puzzlePieces: [
-    ${puzzlePieces.map(piece => `[
-      ${piece.map(row => `[${row.join(', ')}],`).join('\n      ')}
-    ]`).join(',\n    ')},
-  ],
-}`;
-});
+const puzzleOptionsStringified = usePuzzleOptionsStringified(puzzleOptions);
 
 // NOTE: Websockets are not working in Bun somehow. Status keeps being 'CONNECTING'.
 // const {
