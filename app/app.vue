@@ -1,5 +1,7 @@
 <template>
   <div>
+    <button @click="testSse">Test SSE</button>
+
     <button v-if="!pending" @click="calculate">Calculate</button>
     <button v-else @click="cancel">Cancel</button>
     <button @click="print">Print</button>
@@ -126,6 +128,10 @@ const puzzleOptionsStringified = usePuzzleOptionsStringified(puzzleOptions);
 // watch(data, (newVal) => {
 //   console.log(newVal);
 // });
+
+async function testSse () {
+  console.log(await $fetch('/api/sse'));
+}
 
 function onPaste (event: ClipboardEvent) {
   const html = event.clipboardData?.getData('text/plain');
