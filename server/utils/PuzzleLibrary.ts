@@ -572,7 +572,7 @@ export const PuzzleLibrary = {
   },
 
   level18: {
-    figures: ['gob_0','swo_0'],
+    figures: ['gob_0', 'swo_0'],
     gameBoard: [
       [1, 0, 0],
       [0, 0, 0],
@@ -647,7 +647,7 @@ export const PuzzleLibrary = {
   },
 
   level19: {
-    figures: ['cro_0','swo_0'],
+    figures: ['cro_0', 'swo_0'],
     gameBoard: [
       [0, 1, 0],
       [1, 0, 1],
@@ -725,7 +725,7 @@ export const PuzzleLibrary = {
   },
 
   level20: {
-    figures: ['gob_0','swo_0'],
+    figures: ['gob_0', 'swo_0'],
     gameBoard: [
       [1, 1, 0],
       [1, 1, 1],
@@ -802,7 +802,7 @@ export const PuzzleLibrary = {
   },
 
   level21: {
-    figures: ['gau_0','swo_0'],
+    figures: ['gau_0', 'swo_0'],
     gameBoard: [
       [0, 0, 1, 1],
       [0, 1, 0, 1],
@@ -867,7 +867,7 @@ export const PuzzleLibrary = {
   },
 
   level22: {
-    figures: ['cro_0','swo_0'],
+    figures: ['cro_0', 'swo_0'],
     gameBoard: [
       [1, 1, 0, 1],
       [1, 1, 0, 0],
@@ -933,7 +933,7 @@ export const PuzzleLibrary = {
   },
 
   level23: {
-    figures: ['gau_0','swo_0'],
+    figures: ['gau_0', 'swo_0'],
     gameBoard: [
       [1, 1, 1, 1],
       [1, 0, 1, 0],
@@ -1012,7 +1012,7 @@ export const PuzzleLibrary = {
   },
 
   level24: {
-    figures: ['cro_0','swo_0'],
+    figures: ['cro_0', 'swo_0'],
     gameBoard: [
       [0, 0, 0, 0],
       [1, 0, 0, 1],
@@ -1091,7 +1091,7 @@ export const PuzzleLibrary = {
   },
 
   level25: {
-    figures: ['gob_0','swo_0'],
+    figures: ['gob_0', 'swo_0'],
     gameBoard: [
       [0, 1, 1, 1],
       [0, 1, 1, 0],
@@ -1176,7 +1176,7 @@ export const PuzzleLibrary = {
   },
 
   level26: {
-    figures: ['gob_0','cro_0','swo_0'],
+    figures: ['gob_0', 'cro_0', 'swo_0'],
     gameBoard: [
       [1, 1, 1, 2],
       [2, 2, 0, 2],
@@ -1238,10 +1238,12 @@ export const PuzzleLibrary = {
   },
 
   level27: {
-    figures: ['cro_0','hel_0','swo_0'],
+    figures: ['cro_0', 'hel_0', 'swo_0'],
     gameBoard: [
-      [-1],
-      [-1, -1],
+      [2, 2, 2, 2],
+      [0, 1, 2, 1],
+      [0, 2, 1, 2],
+      [0, 2, 2, 2],
     ],
     puzzlePieces: [
       [
