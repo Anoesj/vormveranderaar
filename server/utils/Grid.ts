@@ -62,10 +62,23 @@ export class Grid {
   }
 
   countValue (value: number) {
-    // TODO: Check performance, maybe convert to classic for.
-    return this.data
-      .flat()
-      .reduce((acc, cur) => acc + (cur === value ? 1 : 0), 0);
+    let count = 0;
+
+    const {
+      rows,
+      cols,
+      data,
+    } = this;
+
+    for (let rowIndex = 0; rowIndex < rows; rowIndex++) {
+      for (let colIndex = 0; colIndex < cols; colIndex++) {
+        if (data[rowIndex][colIndex] === value) {
+          count++;
+        }
+      }
+    }
+
+    return count;
   }
 
   everyValueIs (value: number) {
