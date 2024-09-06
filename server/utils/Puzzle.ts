@@ -53,6 +53,7 @@ export class Puzzle {
   #uniqueSituations = new Set<string>();
   // #maxMemoryUsageInGB = 2;
   // #lastSkippedDuplicateSituations = 0;
+  #preparedSolutionStarts = false;
 
   meta: {
     totalNumberOfPossibleCombinations: number;
@@ -76,9 +77,17 @@ export class Puzzle {
 
   #timings: {
     tStart: number;
+    tPrepareSolutionStartsStart: number | null;
+    tPrepareSolutionStartsEnd: number | null;
+    tBruteForceStart: number | null;
+    tBruteForceEnd: number | null;
     tEnd: number | null;
   } = {
     tStart: performance.now(),
+    tPrepareSolutionStartsStart: null,
+    tPrepareSolutionStartsEnd: null,
+    tBruteForceStart: null,
+    tBruteForceEnd: null,
     tEnd: null,
   };
 
@@ -159,6 +168,8 @@ export class Puzzle {
 
   // NOTE: Async so we can hopefully interrupt this function with the this.#abortController later on.
   async preparePossibleSolutionStarts () {
+    this.#timings.tPrepareSolutionStartsStart = performance.now();
+
     /*
       Some notes:
       - We also include the possibility of a corner piece not being placed in a corner at all with this logic.
@@ -383,6 +394,12 @@ export class Puzzle {
     if (this.possibleSolutionStarts.length > 500) {
       this.meta.returningMaxOneSolution = true;
     }
+
+    this.#preparedSolutionStarts = true;
+    this.#timings.tPrepareSolutionStartsEnd = performance.now();
+
+    console.log(`\nPrepared ${this.possibleSolutionStarts.length} possible solution starts.`);
+    this.#logTimeToPrepareSolutionStarts();
   }
 
   async bruteForceSolution ({
@@ -394,39 +411,19 @@ export class Puzzle {
     from?: number;
     to?: number;
   } = {}): Promise<void> {
+    this.#timings.tBruteForceStart = performance.now();
+
+    // This allows us to skip preparing the possible solution starts
+    // if that's more feasible performance-wise.
+    if (!this.#preparedSolutionStarts) {
+      this.possibleSolutionStarts.push(new PossibleSolution(this.targetFigure.value));
+    }
+
     // Brute force solutions for every "possible solution start"
     const possibleSolutionStartsCount = possibleSolutionStarts.length;
     const puzzlePieces = Object.values(this.puzzlePieces);
 
     const iEnd = Math.min(to ?? possibleSolutionStartsCount, possibleSolutionStartsCount);
-
-    const finalize = () => {
-      this.#saveCalculationDuration();
-      console.log('\n-----------------------------------');
-      console.log('Total number of tried combinations:', numberFormatter.format(this.meta.totalNumberOfTriedCombinations));
-      this.#logSkippedSituations(true);
-      console.log('Total time to calculate solution:', this.#milliSecondsToString(this.meta.calculationDuration));
-      console.log('Max memory used:', this.#memoryToString(this.meta.maxMemoryUsed));
-
-      const perfStats = this.#perf;
-
-      type PerfType = keyof typeof perfStats;
-      const loggedPerfTypes: PerfType[] = [
-        'possibleSolutionClone',
-        'countIncorrectCells',
-        'getNextPuzzlePiecesMaxInfluencedCells',
-      ];
-
-      for (const [k, v] of Object.entries(perfStats)) {
-        if (!loggedPerfTypes.includes(k as PerfType)) {
-          continue;
-        }
-
-        const total = MathHelper.sum(v);
-        console.log(`\nAverage time spent in ${k}: ${total / v.length} ms`);
-        console.log(`Total time spent in ${k}: ${total} ms`);
-      }
-    };
 
     for (let i = from; i < iEnd; i++) {
       console.log('\nNumber of tried combinations so far:', numberFormatter.format(this.meta.totalNumberOfTriedCombinations));
@@ -511,7 +508,7 @@ export class Puzzle {
 
           if (this.meta.returningMaxOneSolution) {
             console.log('Returning max one solution, stopping.');
-            finalize();
+            this.#finalize();
             return;
           }
 
@@ -522,7 +519,51 @@ export class Puzzle {
       // this.#logSkippedSituations();
     }
 
-    finalize();
+    this.#finalize();
+  }
+
+  #finalize () {
+    this.#timings.tBruteForceEnd = performance.now();
+
+    this.#saveCalculationDuration();
+    console.log('\n-----------------------------------');
+    console.log('Total number of tried combinations:', numberFormatter.format(this.meta.totalNumberOfTriedCombinations));
+    this.#logSkippedSituations(true);
+    this.#logTimeToPrepareSolutionStarts();
+    this.#logTimeToBruteForce();
+    console.log('Total time to calculate solution:', this.#milliSecondsToString(this.meta.calculationDuration));
+    console.log('Max memory used:', this.#memoryToString(this.meta.maxMemoryUsed));
+
+    const perfStats = this.#perf;
+
+    // type PerfType = keyof typeof perfStats;
+    // const loggedPerfTypes: PerfType[] = [
+    //   'possibleSolutionClone',
+    //   'countIncorrectCells',
+    //   'getNextPuzzlePiecesMaxInfluencedCells',
+    // ];
+
+    for (const [k, v] of Object.entries(perfStats)) {
+      // if (!loggedPerfTypes.includes(k as PerfType)) {
+      //   continue;
+      // }
+
+      if (!v.length) continue;
+
+      const total = MathHelper.sum(v);
+      console.log(`\nAverage time spent in ${k}: ${total / v.length} ms`);
+      console.log(`Total time spent in ${k}: ${total} ms`);
+    }
+  }
+
+  #logTimeToPrepareSolutionStarts () {
+    if (this.#preparedSolutionStarts) {
+      console.log('Time to prepare possible solution starts:', this.#milliSecondsToString(this.#timings.tPrepareSolutionStartsEnd! - this.#timings.tPrepareSolutionStartsStart!));
+    }
+  }
+
+  #logTimeToBruteForce () {
+    console.log('Time to brute force the puzzle:', this.#milliSecondsToString(this.#timings.tBruteForceEnd! - this.#timings.tBruteForceStart!));
   }
 
   *#puzzlePiecePlacementOptionsIterator({

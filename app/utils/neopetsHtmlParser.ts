@@ -20,7 +20,7 @@ export function parseNeopetsHtml (html: string): PuzzleOptions {
   // console.log('Figures:', figures);
   // console.log('Target figure:', targetFigure);
 
-  const gameBoard = Array.from(parsed.querySelector('#content .content table')!.querySelectorAll('tr')!)
+  const gameBoard = Array.from(parsed.querySelector('#content .content table:not([border="1"])')!.querySelectorAll('tr')!)
     .map(tr => Array.from(tr.querySelectorAll('td')!)
       .map(td => {
         // eslint-disable-next-line @typescript-eslint/no-non-null-asserted-optional-chain
