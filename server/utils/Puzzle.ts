@@ -555,18 +555,7 @@ export class Puzzle {
 
     const perfStats = this.#perf;
 
-    // type PerfType = keyof typeof perfStats;
-    // const loggedPerfTypes: PerfType[] = [
-    //   'possibleSolutionClone',
-    //   'countIncorrectCells',
-    //   'getNextPuzzlePiecesMaxInfluencedCells',
-    // ];
-
     for (const [k, v] of Object.entries(perfStats)) {
-      // if (!loggedPerfTypes.includes(k as PerfType)) {
-      //   continue;
-      // }
-
       if (!v.length) continue;
 
       const total = MathHelper.sum(v);
@@ -577,8 +566,8 @@ export class Puzzle {
 
   #logTimeToPrepareSolutionStarts () {
     console.log('Time to prepare possible solution starts:', this.#hasPreparedSolutionStarts
-        ? this.#milliSecondsToString(this.#timings.tPrepareSolutionStartsEnd! - this.#timings.tPrepareSolutionStartsStart!)
-        : 'n/a');
+      ? this.#milliSecondsToString(this.#timings.tPrepareSolutionStartsEnd! - this.#timings.tPrepareSolutionStartsStart!)
+      : 'n/a');
   }
 
   #logTimeToBruteForce () {
