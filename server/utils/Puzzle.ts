@@ -603,18 +603,16 @@ export class Puzzle {
       this.meta.totalNumberOfIteratorPlacementAttempts++;
 
       // const p0 = performance.now();
-
       const position = possiblePositions[i]!;
       const grid = puzzlePiece.toEmptyGameBoardWithPuzzlePieceAt(position);
       // const p1 = performance.now();
-
       const before = gameBoard.clone();
-      // const p2 = performance.now();
 
+      // const p2 = performance.now();
       const after = gameBoard.stack(this.figuresCount, grid);
-      // const p3 = performance.now();
 
       // NOTE: We used to check if we had this exact situation before, but this takes up too much memory.
+      // const p3 = performance.now();
       // const shouldAbort = this.#calculatedSameSituationBefore(next.map(p => p.puzzlePiece), after);
       // const p4 = performance.now();
 
@@ -628,21 +626,25 @@ export class Puzzle {
       //   continue;
       // }
 
+      const nextLength = next.length;
+
       // const p5 = performance.now();
       const afterCorrectCellsCount = after.countValue(this.targetFigure.value);
       const afterIncorrectCellsCount = after.cells - afterCorrectCellsCount;
+
       // const p6 = performance.now();
-      // TODO: Try to rewrite to classic for
-      const nextPuzzlePiecesMaxInfluencedCells = next.reduce(this.#puzzlePieceCellsInfluencedReducer, 0);
+      let nextPuzzlePiecesMaxInfluencedCells = 0;
+      for (let i = 0; i < nextLength; i++) {
+        nextPuzzlePiecesMaxInfluencedCells += next[i]!.puzzlePiece.cellsInfluenced;
+      }
+
       // const p7 = performance.now();
-      const canBeSolvedFromHereOn = afterIncorrectCellsCount <= nextPuzzlePiecesMaxInfluencedCells;
+      const canBeSolvedFromHere = afterIncorrectCellsCount <= nextPuzzlePiecesMaxInfluencedCells;
 
       // this.#perf.countIncorrectCells.push(p6 - p5);
       // this.#perf.getNextPuzzlePiecesMaxInfluencedCells.push(p7 - p6);
 
-      const nextLength = next.length;
-
-      if (!canBeSolvedFromHereOn) {
+      if (!canBeSolvedFromHere) {
         // const skipped = next.reduce((acc, p) => acc * p.puzzlePiece.getPossiblePositions(this.#hasPreparedSolutionStarts).length, 1);
 
         // If at the final level, we skip 1 impossible situation.
@@ -695,10 +697,6 @@ export class Puzzle {
       // Only on the final level, yield the result up all the way to the top.
       yield result;
     }
-  }
-
-  #puzzlePieceCellsInfluencedReducer (acc: number, p: PuzzlePiecePlacementOptions) {
-    return acc + p.puzzlePiece.cellsInfluenced;
   }
 
   /**
