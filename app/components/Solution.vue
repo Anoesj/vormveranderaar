@@ -44,7 +44,11 @@ const {
   solution: PossibleSolution;
 }>();
 
-const showSorted = ref(false);
+const showSorted = ref(true);
+
 const sortCheckboxId = computed(() => `solution-${nth}-sort`);
-const parts = computed(() => showSorted.value ? solution.parts.toSorted((a, b) => a.id.localeCompare(b.id, 'nl-NL')) : solution.parts);
+
+const parts = computed(() => showSorted.value
+  ? solution.parts.toSorted((a, b) => a.id.localeCompare(b.id, 'nl-NL'))
+  : solution.parts);
 </script>

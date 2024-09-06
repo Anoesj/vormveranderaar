@@ -88,10 +88,6 @@ export class PossibleSolution {
     this.parts.sort((a, b) => a.id.localeCompare(b.id, 'nl-NL'));
   }
 
-  calculateProduct (arr: number[]) {
-    return arr.reduce((acc, cur) => acc * cur, 1);
-  }
-
   getContinuationInfo (puzzlePieces: PuzzlePiece[]) {
     const unusedPuzzlePieces = puzzlePieces.filter((puzzlePiece) => !this.parts.find((part) => puzzlePiece.id === part.id));
 
@@ -106,7 +102,7 @@ export class PossibleSolution {
         possiblePositions: puzzlePiece.possiblePositionsWhereCornersNotAffected,
       }));
 
-    const unusedPuzzlePiecesPossibleCombinations = this.calculateProduct(unusedPuzzlePiecesPlacementOptions.map(p => p.possiblePositions.length));
+    const unusedPuzzlePiecesPossibleCombinations = MathHelper.product(unusedPuzzlePiecesPlacementOptions.map(p => p.possiblePositions.length));
 
     this.continuationInfo = {
       unusedPuzzlePiecesPlacementOptions,

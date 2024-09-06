@@ -5,11 +5,11 @@
     <button @click="print">Print</button>
 
     <div>
-      <p>Enter Neopets HTML:</p>
-      <textarea @paste="parseHtml"></textarea>
+      <p>Paste Neopets HTML:</p>
+      <textarea @paste="onPaste"></textarea>
     </div>
 
-    <h1>{{ !result ? 'Click calculate to get started' : pending ? 'Loading results...' : 'Results' }}</h1>
+    <h1>{{ !result ? 'Paste Neopets HTML or click Calculate to get started with a fallback' : pending ? 'Loading results...' : 'Results' }}</h1>
 
     <div v-if="result" :key="resultHash">
       <h2>Info</h2>
@@ -48,10 +48,10 @@
         </div>
       </details>
 
-      <details @toggle="showPossibleSolutionStarts = $event.newState">
+      <details @toggle="showPossibleSolutionStarts = $event.newState === 'open'">
         <summary>
           <h2>
-            Phase 1: possible solution starts based on correct corner outputs ({{ result.possibleSolutionStarts.length }})
+            Phase 1: possible solution starts based on correct corner outputs ({{ numberFormatter.format(result.possibleSolutionStarts.length) }})
           </h2>
         </summary>
 
@@ -66,7 +66,6 @@
               :nth="index + 1"
               :possibleSolutionStart="possibleSolutionStart"
               :totalPuzzlePiecesCount="Object.keys(result.puzzlePieces).length"
-              :numberFormatter="numberFormatter"
             />
           </template>
         </template>
@@ -74,7 +73,7 @@
 
       <details open>
         <summary>
-          <h2>Phase 2: solutions ({{ result.solutions.length }}{{ result.meta.returningMaxOneSolution ? ' — maximized at one' : '' }})</h2>
+          <h2>Phase 2: solutions ({{ numberFormatter.format(result.solutions.length) }}{{ result.meta.returningMaxOneSolution ? ' — maximized at one' : '' }})</h2>
         </summary>
         <p v-if="!result.solutions.length">No solutions possible.</p>
         <template v-else>
@@ -91,121 +90,40 @@
 </template>
 
 <script setup lang="ts">
+// import { useWebSocket } from '@vueuse/core';
 import type { Puzzle } from '#build/types/nitro-imports';
-import type { PuzzleOptions } from '~~/server/utils/PuzzleLibrary';
-
-// import { useLocalStorage } from '@vueuse/core';
-
-// const matrixSource = useLocalStorage('matrix');
-
-// type MatrixSource = number[][];
-
-// const rowCount = useLocalStorage('rowCount', 6);
-// const colCount = useLocalStorage('colCount', 6);
 
 const result = ref<Puzzle>();
 const resultHash = ref<string>();
 const pending = ref(false);
 
-const lang = 'nl-NL';
-const numberFormatter = new Intl.NumberFormat(lang, {
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 2,
-});
-
 const showPossibleSolutionStarts = ref(false);
 
 const puzzleOptions = ref<PuzzleOptions>();
 
-function formatDuration (ms: number) {
-  // Log seconds, minutes or hours depending on the duration
-  if (ms < 1000) {
-    return `${numberFormatter.format(ms)} milliseconds`;
-  }
-  else if (ms < 60_000) {
-    return `${numberFormatter.format(ms / 1000)} seconds`;
-  }
-  else if (ms < 3_600_000) {
-    return `${numberFormatter.format(ms / 60_000)} minutes`;
-  }
-  else {
-    return `${numberFormatter.format(ms / 3_600_000)} hours`;
-  }
-}
+// NOTE: Websockets are not working in Bun somehow. Status keeps being 'CONNECTING'.
+// const {
+//   status,
+//   data,
+//   send,
+// } = useWebSocket(`ws://${location.host}/api/ws`);
 
-function formatMemory (memory: number) {
-  // B -> kB -> MB
-  memory /= 1024 ** 2;
+// watch(status, (newVal) => {
+//   console.log('WebSocket status:', newVal); // Log WebSocket state
+// }, { immediate: true });
 
-  const unit = memory > 1024 ? 'GB' : 'MB';
-  return `${numberFormatter.format(unit === 'GB' ? memory / 1024 : memory)} ${unit}`;
-}
+// watch(data, (newVal) => {
+//   console.log(newVal);
+// });
 
-function parseHtml (event: ClipboardEvent) {
-  const parser = new DOMParser;
+function onPaste (event: ClipboardEvent) {
   const html = event.clipboardData?.getData('text/plain');
 
   if (!html) {
-    console.log('No HTML found in clipboard');
-    return;
+    throw new Error('No HTML found in clipboard');
   }
 
-  const parsed = parser.parseFromString(html, 'text/html');
-
-  const figuresTable = parsed.querySelector('table[border="1"]');
-
-  if (!figuresTable) {
-    console.log('No figures table found');
-    return;
-  }
-
-  const figures = Array.from(figuresTable.querySelectorAll('img'))
-    .map(img => img.src.split('/').at(-1)!.split('.gif').at(0)!)
-    .filter(name => name !== 'arrow');
-
-  // Remove last
-  figures.pop();
-
-  const targetFigure = figures.at(-1);
-
-  console.log('Figures:', figures);
-  console.log('Target figure:', targetFigure);
-
-  const gameBoard = Array.from(parsed.querySelector('#content .content table')!.querySelectorAll('tr')!)
-    .map(tr => Array.from(tr.querySelectorAll('td')!)
-      .map(td => {
-        // eslint-disable-next-line @typescript-eslint/no-non-null-asserted-optional-chain
-        const figure = td.querySelector('img')?.src.split('/').at(-1)!.split('.gif').at(0)!;
-        return figures.indexOf(figure);
-      })
-    );
-
-  console.log('Game board:', gameBoard);
-
-  const puzzlePieces = Array.from(parsed.querySelectorAll('table[cellpadding="15"] > tbody > tr > td'))
-    .map(td => {
-      // An empty cell's td has attribute height="10"
-      // A filled cell has no properties
-      // Empty cell should become 0
-      // Filled cell should become 1
-      return Array.from(td.querySelectorAll('tr'))
-        .map(tr => Array.from(tr.querySelectorAll('td'))
-          .map(td => td.hasAttribute('height') ? 0 : 1)
-        );
-    });
-
-  console.log('Puzzle pieces:', puzzlePieces);
-
-  // for (const table of allTables) {
-  //   console.log(table.border);
-  // }
-
-  puzzleOptions.value = {
-    figures,
-    gameBoard,
-    puzzlePieces,
-  };
-
+  puzzleOptions.value = parseNeopetsHtml(html);
   calculate();
 }
 
@@ -214,28 +132,30 @@ let controller: AbortController;
 async function calculate () {
   pending.value = true;
 
+  // NOTE: Unfortunately, canceling a request does not stop the calculation in the backend yet.
+  // This may be solved by using web sockets, but those aren't working in Bun yet. What a great day.
   controller = new AbortController();
-
   controller.signal.addEventListener('abort', () => {
     pending.value = false;
   });
 
-  const res = await $fetch('/api/calculate-solutions', {
+  // const success = send(JSON.stringify(puzzleOptions.value));
+
+  // if (!success) {
+  //   throw new Error('Failed to send data to WebSocket');
+  // }
+
+  const response = await $fetch<Puzzle>('/api/calculate-solutions', {
     method: 'POST',
     timeout: 0,
     retry: 0,
     retryDelay: 0,
     signal: controller.signal,
-    body: puzzleOptions.value,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  }) as any;
+    ...(puzzleOptions.value ? { body: puzzleOptions.value } : {}),
+  });
 
-  resultHash.value = await window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(result.value)))
-    .then((hash) => Array.from(new Uint8Array(hash))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join(''));
-
-  result.value = res;
+  resultHash.value = await hashObject(response);
+  result.value = response;
 
   // for await (const chunk of streamingFetch(() => fetch('/api/calculate-solutions', {
   //   signal: controller.signal,
@@ -251,14 +171,12 @@ async function calculate () {
 }
 
 function cancel() {
-  controller?.abort();
+  controller?.abort('User canceled');
 }
 
 function print() {
   window.print();
 }
-
-// await run();
 </script>
 
 <style>

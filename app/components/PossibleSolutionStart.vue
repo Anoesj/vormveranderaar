@@ -50,7 +50,6 @@ const {
   nth: number;
   possibleSolutionStart: PossibleSolution;
   totalPuzzlePiecesCount: number;
-  numberFormatter: Intl.NumberFormat;
 }>();
 
 const puzzlePiecesUsedCount = computed(() => possibleSolutionStart.parts.length);

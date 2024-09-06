@@ -6,4 +6,8 @@ export class Figure {
     this.name = name;
     this.value = value;
   }
+
+  toString () {
+    return `${this.name} (${this.value})`;
+  }
 }

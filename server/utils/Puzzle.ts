@@ -74,31 +74,44 @@ export class Puzzle {
     calculationDuration: 0,
   };
 
-  #perf: {
+  #timings: {
     tStart: number;
     tEnd: number | null;
-    toEmptyGameBoardWithPuzzlePieceAt: number[];
-    clone: number[];
-    stack: number[];
-    calculatedSameSituationBefore: number[];
   } = {
     tStart: performance.now(),
     tEnd: null,
-    toEmptyGameBoardWithPuzzlePieceAt: [],
-    clone: [],
-    stack: [],
-    calculatedSameSituationBefore: [],
   };
 
-  constructor(options: {
+  #perf: {
+    toEmptyGameBoardWithPuzzlePieceAt: number[];
+    gameBoardClone: number[];
+    gameBoardStack: number[];
+    calculatedSameSituationBefore: number[];
+    possibleSolutionClone: number[];
+    countIncorrectCells: number[];
+    getNextPuzzlePiecesMaxInfluencedCells: number[];
+  } = {
+    toEmptyGameBoardWithPuzzlePieceAt: [],
+    gameBoardClone: [],
+    gameBoardStack: [],
+    calculatedSameSituationBefore: [],
+    possibleSolutionClone: [],
+    countIncorrectCells: [],
+    getNextPuzzlePiecesMaxInfluencedCells: [],
+  };
+
+  #loggingDisabled = false;
+
+  #abortController: AbortController;
+
+  constructor (options: {
     figures: Array<string | number>;
     gameBoard: GridLike<number>;
     puzzlePieces: GridLike<number>[];
-  }) {
+  }, abortController: AbortController) {
     console.log('\nYum, a puzzle to chew on!');
-    // console.log('Figures:', options.figures);
-    // console.log('Game board:', options.gameBoard.toString());
-    // console.log('Puzzle pieces:', options.puzzlePieces.map(p => p.toString()));
+
+    this.#abortController = abortController;
 
     this.figures = options.figures.map((name, index) => new Figure(name, index));
 
@@ -119,22 +132,516 @@ export class Puzzle {
 
     const puzzlePieces = Object.values(this.puzzlePieces);
 
+    console.log('\nFigures:', this.figures.map(f => f.toString()).join(', '));
+    console.log('\nGame board:', this.gameBoard.toString());
+    console.log('\nPuzzle pieces:');
+    for (const puzzlePiece of puzzlePieces) {
+      console.log(`\n${puzzlePiece.id}`);
+      console.log(puzzlePiece.grid.toString());
+    }
+
     this.puzzlePiecesCount = puzzlePieces.length;
 
     this.puzzlePiecesThatCannotAvoidAnyCorners = puzzlePieces
       .filter((p) => !p.canAvoidAffectingSomeCorners)
       .map((p) => p.id);
 
-    this.meta.totalNumberOfPossibleCombinations = this.calculateProduct(puzzlePieces.map(p => p.possiblePositions.length));
+    this.meta.totalNumberOfPossibleCombinations = MathHelper.product(puzzlePieces.map(p => p.possiblePositions.length));
 
     this.meta.returningMaxOneSolution = this.meta.totalNumberOfPossibleCombinations > 1_000_000;
 
-    console.log('Total number of possible combinations:', numberFormatter.format(this.meta.totalNumberOfPossibleCombinations));
+    console.log('\nTotal number of possible combinations:', numberFormatter.format(this.meta.totalNumberOfPossibleCombinations));
 
     this.#getMinimumTransformsNeededForCorners();
     this.#getPossibleTransformsForCorners();
     this.#getPuzzlePiecesWithActiveCorners();
-    this.#combineCornerOptions();
+  }
+
+  // NOTE: Async so we can hopefully interrupt this function with the this.#abortController later on.
+  async preparePossibleSolutionStarts () {
+    /*
+      Some notes:
+      - We also include the possibility of a corner piece not being placed in a corner at all with this logic.
+      - We take into account that some puzzle pieces will always hit one or more corners.
+    */
+
+    function getPartById(
+      c: PossiblePuzzlePieceCombination,
+      id: PuzzlePiece['id'],
+    ) {
+      return c.find((part) => part.id === id);
+    }
+
+    function compatible(data: Partial<Record<CornerType, PossiblePuzzlePieceCombination>>): boolean {
+      const keys = Object.keys(data) as CornerType[];
+      const keyCorner1 = keys[0]!;
+      const keyCorner2 = keys[1]!;
+      const combinationCorner1 = data[keyCorner1]!;
+      const combinationCorner2 = data[keyCorner2]!;
+
+      // Check if the combination for corner 1 contains any puzzle pieces that would affect
+      // corner 2 too, while the combination for corner 2 doesn't use those puzzle pieces.
+      for (const part of combinationCorner1) {
+        if (part.affects.includes(keyCorner2) && !combinationCorner2.find((p) => p.id === part.id)) {
+          return false;
+        }
+      }
+
+      // Check if the combination for corner 2 contains any puzzle pieces that would affect
+      // corner 1 too, while the combination for corner 1 doesn't use those puzzle pieces.
+      for (const part of combinationCorner2) {
+        if (part.affects.includes(keyCorner1) && !combinationCorner1.find((p) => p.id === part.id)) {
+          return false;
+        }
+      }
+
+      // Checks if a and b use the same puzzle piece(s), but with different positions.
+      // If so, return false.
+      const intersection = intersect(combinationCorner1, combinationCorner2);
+
+      if (!intersection.length) {
+        return true;
+      }
+
+      for (const samePuzzlePieceId of intersection) {
+        const part1 = getPartById(combinationCorner1, samePuzzlePieceId)!;
+        const part2 = getPartById(combinationCorner2, samePuzzlePieceId)!;
+
+        if (part1.position !== part2.position) {
+          return false;
+        }
+      }
+
+      return true;
+    }
+
+    function intersect<
+      T1 extends PossiblePuzzlePieceCombination,
+      T2 extends PossiblePuzzlePieceCombination,
+    >(arr1: T1, arr2: T2): (T1 | T2)[number]['id'][] {
+      return arr1
+        .filter((item1) => arr2.find((item2) => item2.id === item1.id))
+        .map((item) => item.id);
+    }
+
+    for (const topLeft of this.cornersInfo!.topLeft.possiblePuzzlePieceCombinations!) {
+      if (await this.#checkRequestIsCanceled()) return;
+
+      for (const topRight of this.cornersInfo!.topRight.possiblePuzzlePieceCombinations!) {
+        if (await this.#checkRequestIsCanceled()) return;
+
+        if (!compatible({ topLeft, topRight })) {
+          continue;
+        }
+
+        for (const bottomLeft of this.cornersInfo!.bottomLeft.possiblePuzzlePieceCombinations!) {
+          if (await this.#checkRequestIsCanceled()) return;
+
+          if (
+            !compatible({ topLeft, bottomLeft })
+            || !compatible({ topRight, bottomLeft })
+          ) {
+            continue;
+          }
+
+          for (const bottomRight of this.cornersInfo!.bottomRight.possiblePuzzlePieceCombinations!) {
+            if (await this.#checkRequestIsCanceled()) return;
+
+            if (
+              !compatible({ topLeft, bottomRight })
+              || !compatible({ topRight, bottomRight })
+              || !compatible({ bottomLeft, bottomRight })
+            ) {
+              continue;
+            }
+
+            if (this.possibleSolutionStarts.length === 500) {
+              console.log('Disabling logging possible solution starts, because there are too many of them.');
+              this.#loggingDisabled = true;
+            }
+
+            const combination = {
+              topLeft,
+              topRight,
+              bottomLeft,
+              bottomRight,
+            };
+
+            const allPuzzlePiecesAffectingCorners = Object.values(combination)
+              // Throw all puzzle pieces in one array.
+              .flat()
+              // Dedupe by puzzle piece ID. This prevents their 'affects' to be counted multiple times.
+              .filter((item, pos, self) => {
+                return self.findIndex((i) => i.id === item.id) === pos;
+              });
+
+            const allAffected = allPuzzlePiecesAffectingCorners
+              .flatMap((corner) => corner.affects);
+
+            const affectedCounts: Record<CornerType, number> = {
+              topLeft: 0,
+              topRight: 0,
+              bottomLeft: 0,
+              bottomRight: 0,
+            };
+
+            for (const affected of allAffected) {
+              affectedCounts[affected]++;
+            }
+
+            const affectedCountsCompatible = Object.entries(affectedCounts)
+              .every(([cornerType, affectedCount]) => {
+                return this.cornersInfo![cornerType as CornerType].possibleTransforms!.includes(affectedCount);
+              });
+
+            if (!affectedCountsCompatible) {
+              this.#maybeLog(() => console.log(
+                'Discarded possible solution start, because not all corners are affected by the puzzle pieces the right number of times:',
+                affectedCounts,
+              ));
+
+              continue;
+            }
+
+            const possibleSolutionStart = new PossibleSolution(this.targetFigure.value);
+
+            let missingRequiredPuzzlePieces = [...this.puzzlePiecesThatCannotAvoidAnyCorners];
+
+            for (const part of allPuzzlePiecesAffectingCorners) {
+              const puzzlePiece = this.puzzlePieces[part.id]!;
+
+              missingRequiredPuzzlePieces = missingRequiredPuzzlePieces
+                .filter((p) => p !== part.id);
+
+              possibleSolutionStart.add({
+                id: part.id,
+                position: part.position,
+                grid: puzzlePiece.toEmptyGameBoardWithPuzzlePieceAt(part.position),
+              });
+            }
+
+            if (missingRequiredPuzzlePieces.length) {
+              // this.#maybeLog(
+              //   () => console.log(
+              //     'Discarded possible solution start, because not all puzzle pieces that affect corners are used in the corners:',
+              //     missingRequiredPuzzlePieces,
+              //   ),
+              //   // () => console.log('Discarded possible solution start, because not all puzzle pieces that affect corners are used in the corners'),
+              // );
+
+              continue;
+            }
+
+            possibleSolutionStart.sortAlphabetically();
+
+            if (this.possibleSolutionStarts.find((other) => possibleSolutionStart.equals(other))) {
+              console.log('Discarded possible solution start (duplicate)');
+              continue;
+            }
+
+            let previousGameBoard = this.gameBoard;
+
+            for (const part of possibleSolutionStart.parts) {
+              part.before = previousGameBoard.clone();
+              part.after = previousGameBoard.stack(this.figuresCount, part.grid);
+              previousGameBoard = part.after;
+            }
+
+            this.possibleSolutionStarts.push(possibleSolutionStart);
+
+            // Fallback log so we do see something, but it doesn't really affect performance.
+            console.log(`\nAdded new possible solution start (#${this.possibleSolutionStarts.length})`);
+            // this.#maybeLog(
+            //   () => console.log(`\nAdded new possible solution start (#${this.possibleSolutionStarts.length})`),
+            //   () => console.log('Added new possible solution start'),
+            // );
+
+            // this.#maybeLog(() => console.log(possibleSolutionStart.toString()));
+          }
+        }
+      }
+    }
+
+    // Sort possible solution starts by length of the array.
+    // We want to brute force the possible solution starts that
+    // have the least amount of possible combinations first.
+    const puzzlePieces = Object.values(this.puzzlePieces);
+    this.possibleSolutionStarts.sort((a, b) => {
+      return a.getContinuationInfo(puzzlePieces).unusedPuzzlePiecesPossibleCombinations
+        - b.getContinuationInfo(puzzlePieces).unusedPuzzlePiecesPossibleCombinations;
+    });
+
+    // We need to add the index after the sorting.
+    for (const [index, possibleSolutionStart] of this.possibleSolutionStarts.entries()) {
+      possibleSolutionStart.solutionStartIndex = index;
+
+      for (const part of possibleSolutionStart.parts) {
+        part.partOfPossibleSolutionStart = index;
+      }
+    }
+
+    if (this.possibleSolutionStarts.length > 500) {
+      this.meta.returningMaxOneSolution = true;
+    }
+  }
+
+  async *bruteForceSolution ({
+    possibleSolutionStarts = this.possibleSolutionStarts,
+    from = 0,
+    to,
+  } : {
+    possibleSolutionStarts?: PossibleSolution[];
+    from?: number;
+    to?: number;
+  } = {}): AsyncGenerator<boolean> {
+    // Brute force solutions for every "possible solution start"
+    const possibleSolutionStartsCount = possibleSolutionStarts.length;
+    const puzzlePieces = Object.values(this.puzzlePieces);
+
+    const iEnd = Math.min(to ?? possibleSolutionStartsCount, possibleSolutionStartsCount);
+
+    const finalize = () => {
+      this.#saveCalculationDuration();
+      console.log('\n-----------------------------------');
+      console.log('Total number of tried combinations:', numberFormatter.format(this.meta.totalNumberOfTriedCombinations));
+      this.#logSkippedSituations(true);
+      console.log('Total time to calculate solution:', this.#milliSecondsToString(this.meta.calculationDuration));
+      console.log('Max memory used:', this.#memoryToString(this.meta.maxMemoryUsed));
+
+      const perfStats = this.#perf;
+
+      type PerfType = keyof typeof perfStats;
+      const loggedPerfTypes: PerfType[] = [
+        'possibleSolutionClone',
+        'countIncorrectCells',
+        'getNextPuzzlePiecesMaxInfluencedCells',
+      ];
+
+      for (const [k, v] of Object.entries(perfStats)) {
+        if (!loggedPerfTypes.includes(k as PerfType)) {
+          continue;
+        }
+
+        const total = MathHelper.sum(v);
+        console.log(`\nAverage time spent in ${k}: ${total / v.length} ms`);
+        console.log(`Total time spent in ${k}: ${total} ms`);
+      }
+    };
+
+    for (let i = from; i < iEnd; i++) {
+      console.log('\nNumber of tried combinations so far:', numberFormatter.format(this.meta.totalNumberOfTriedCombinations));
+      this.#logSkippedSituations();
+      await this.#checkMemoryUsage();
+
+      const possibleSolutionStart = possibleSolutionStarts[i]!;
+
+      const {
+        unusedPuzzlePiecesPlacementOptions,
+        unusedPuzzlePiecesCount,
+        unusedPuzzlePiecesPossibleCombinations,
+      } = possibleSolutionStart.getContinuationInfo(puzzlePieces);
+
+      console.log(`\nBrute forcing from possible solution start #${i + 1}/${possibleSolutionStartsCount} (${numberFormatter.format(unusedPuzzlePiecesPossibleCombinations)} possible combinations)`);
+      this.#maybeLog(() => console.log('Unused puzzle pieces:', unusedPuzzlePiecesCount === 0 ? '-' : `${unusedPuzzlePiecesCount} (${unusedPuzzlePiecesPlacementOptions.map(p => p.puzzlePiece.id).join(', ')})`));
+
+      // If possible solution consist of no possible solution parts,
+      // the solution is: do nothing. In that case, the grid after all changes
+      // is the original game board.
+      const gameBoardSoFar = possibleSolutionStart.finalGameBoard ?? this.gameBoard;
+      gameBoardSoFar.checkIsSolution(this.targetFigure.value);
+
+      this.#maybeLog(() => console.log('Game board so far:', gameBoardSoFar.toString()));
+
+      if (!unusedPuzzlePiecesCount) {
+        this.#maybeLog(() => console.log('No unused puzzle pieces, checking if we reached a solution already'));
+
+        if (gameBoardSoFar.isSolution) {
+          console.log('Found solution!');
+          console.log(possibleSolutionStart.toString());
+          this.meta.totalNumberOfTriedCombinations++;
+          this.solutions.push(possibleSolutionStart);
+
+          // this.#logSkippedSituations();
+          yield true;
+
+          if (this.meta.returningMaxOneSolution) {
+            console.log('Returning max one solution, stopping the brute force');
+            return;
+          }
+
+          continue;
+        }
+
+        this.#maybeLog(() => console.log('No solutions found for this possible solution start'));
+        // this.#logSkippedSituations();
+        yield false;
+        continue;
+      }
+
+      const gameBoard = gameBoardSoFar.clone();
+
+      const shouldAbort = this.#calculatedSameSituationBefore(unusedPuzzlePiecesPlacementOptions.map(p => p.puzzlePiece), gameBoard);
+
+      if (shouldAbort) {
+        this.#maybeLog(() => console.log(`Had the same grid with the same unused puzzle pieces before, skipping this entire possible solution start.`));
+        this.meta.skippedDuplicateSituations += unusedPuzzlePiecesPossibleCombinations;
+        // this.#logSkippedSituations();
+        yield false;
+        continue;
+      }
+
+      const currentPuzzlePiecePlacementOptions = unusedPuzzlePiecesPlacementOptions.shift()!;
+
+
+      for (const possibleSolution of this.#puzzlePiecePlacementOptionsIterator({
+        gameBoard,
+        baseSolution: possibleSolutionStart,
+        current: currentPuzzlePiecePlacementOptions,
+        next: unusedPuzzlePiecesPlacementOptions,
+      })) {
+        // await this.#nextEventLoopTick();
+
+        this.meta.totalNumberOfTriedCombinations++;
+
+        if (possibleSolution.isSolution()) {
+          console.log('Found solution!');
+          console.log(possibleSolution.toString());
+          this.solutions.push(possibleSolution);
+          yield true;
+
+          if (this.meta.returningMaxOneSolution) {
+            console.log('Returning max one solution, stopping.');
+            finalize();
+            return;
+          }
+
+          continue;
+        }
+      }
+
+      // this.#logSkippedSituations();
+    }
+
+    finalize();
+  }
+
+  *#puzzlePiecePlacementOptionsIterator({
+    gameBoard,
+    baseSolution,
+    current,
+    next,
+  }: {
+    gameBoard: GameBoard;
+    baseSolution: PossibleSolution;
+    current: PuzzlePiecePlacementOptions;
+    next: PuzzlePiecePlacementOptions[];
+  }): Generator<PossibleSolution> {
+    const { puzzlePiece, possiblePositions } = current;
+    const possiblePositionCount = possiblePositions.length;
+
+    // console.log('Now trying multiple placements of puzzle piece:', puzzlePiece.id);
+
+    for (let i = 0; i < possiblePositionCount; i++) {
+      // const p0 = performance.now();
+
+      const position = possiblePositions[i]!;
+      const grid = puzzlePiece.toEmptyGameBoardWithPuzzlePieceAt(position);
+      // const p1 = performance.now();
+
+      const before = gameBoard.clone();
+      // const p2 = performance.now();
+
+      const after = gameBoard.stack(this.figuresCount, grid);
+      // const p3 = performance.now();
+
+      // NOTE: We used to check if we had this exact situation before, but this takes up too much memory.
+      // const shouldAbort = this.#calculatedSameSituationBefore(next.map(p => p.puzzlePiece), after);
+      // const p4 = performance.now();
+
+      // this.#perf.toEmptyGameBoardWithPuzzlePieceAt.push(p1 - p0);
+      // this.#perf.gameBoardClone.push(p2 - p1);
+      // this.#perf.gameBoardStack.push(p3 - p2);
+      // this.#perf.calculatedSameSituationBefore.push(p4 - p3);
+
+      // if (shouldAbort) {
+      //   this.meta.skippedDuplicateSituations += MathHelper.product(next.map(p => p.possiblePositions.length));
+      //   continue;
+      // }
+
+      const p5 = performance.now();
+
+      const result = baseSolution.cloneWith([
+        {
+          id: puzzlePiece.id,
+          position,
+          grid,
+          before,
+          after,
+        },
+      ]);
+
+      const p6 = performance.now();
+      const afterCorrectCellsCount = after.countValue(this.targetFigure.value);
+      const afterIncorrectCellsCount = after.cells - afterCorrectCellsCount;
+      const p7 = performance.now();
+      const nextPuzzlePiecesMaxInfluencedCells = next.reduce((acc, p) => acc + p.puzzlePiece.cellsInfluenced, 0);
+      const p8 = performance.now();
+      const canBeSolvedFromHereOn = afterIncorrectCellsCount <= nextPuzzlePiecesMaxInfluencedCells;
+
+      this.#perf.possibleSolutionClone.push(p6 - p5);
+      this.#perf.countIncorrectCells.push(p7 - p6);
+      this.#perf.getNextPuzzlePiecesMaxInfluencedCells.push(p8 - p7);
+
+      if (!canBeSolvedFromHereOn) {
+        this.meta.skippedImpossibleSituations += next.length;
+        continue;
+      }
+
+      // If there are more levels, proceed to the next level, yield that
+      // level's result and continue with the next possible position of
+      // the current puzzle piece.
+      if (next.length) {
+        const [newCurrent, ...newNext] = next;
+
+        // Let another iterator yield for us. This "iterator recursion"
+        // will be repeated until we reach the final level.
+        yield* this.#puzzlePiecePlacementOptionsIterator({
+          gameBoard: after,
+          baseSolution: result,
+          current: newCurrent!,
+          next: newNext,
+        });
+
+        // Prevent yielding the result of the current level, while we
+        // still have deeper levels to go through.
+        continue;
+      }
+
+      // Only on the final level, yield the result up all the way to the top.
+      yield result;
+    }
+  }
+
+  /**
+   * Indicates whether we ran into this exact situation before, so
+   * with the same game board grid and the same puzzle pieces left.
+   *
+   * NOTE: Don't use this during the brute force, as saving every
+   * situation takes up so much memory, that the script will just
+   * crash at some point.
+   */
+  #calculatedSameSituationBefore (puzzlePieces: PuzzlePiece[], gameBoard: GameBoard): boolean {
+    // IDEA: Represent every puzzle piece using a binary code. The number of bits should be equal to the number of puzzle pieces.
+    // Then we can create a bitmask that represents which puzzle pieces have been used and which ones haven't.
+
+    const key = `${puzzlePieces.map(p => p.id).join('')}${gameBoard.toShortString()}`;
+
+    if (this.#uniqueSituations.has(key)) {
+      return true;
+    }
+
+    this.#uniqueSituations.add(key);
+    return false;
   }
 
   #createCornerInfo (corner: number) {
@@ -208,9 +715,9 @@ export class Puzzle {
 
           for (const [nthBit, bitValue] of iBinary.split('').reverse().entries()) {
             if (bitValue === '1') {
-              const puzzlePieceId = cornerInfo.puzzlePiecesThatCanAffectState[nthBit];
+              const puzzlePieceId = cornerInfo.puzzlePiecesThatCanAffectState[nthBit]!;
 
-              const puzzlePiece = this.puzzlePieces[puzzlePieceId];
+              const puzzlePiece = this.puzzlePieces[puzzlePieceId]!;
 
               let position: Position;
 
@@ -289,214 +796,20 @@ export class Puzzle {
     }
   }
 
-  #combineCornerOptions () {
-    /*
-      Some notes:
-      - We also include the possibility of a corner piece not being placed in a corner at all with this logic.
-      - We take into account that some puzzle pieces will always hit one or more corners.
-    */
+  async #checkRequestIsCanceled () {
+    await this.#nextTick();
 
-    function getPartById(
-      c: PossiblePuzzlePieceCombination,
-      id: PuzzlePiece['id'],
-    ) {
-      return c.find((part) => part.id === id);
-    }
+    const { signal } = this.#abortController;
 
-    function compatible(data: Partial<Record<CornerType, PossiblePuzzlePieceCombination>>): boolean {
-      const keys = Object.keys(data) as CornerType[];
-      const keyCorner1 = keys[0];
-      const keyCorner2 = keys[1];
-      const combinationCorner1 = data[keyCorner1]!;
-      const combinationCorner2 = data[keyCorner2]!;
-
-      // Check if the combination for corner 1 contains any puzzle pieces that would affect
-      // corner 2 too, while the combination for corner 2 doesn't use those puzzle pieces.
-      for (const part of combinationCorner1) {
-        if (part.affects.includes(keyCorner2) && !combinationCorner2.find((p) => p.id === part.id)) {
-          return false;
-        }
-      }
-
-      // Check if the combination for corner 2 contains any puzzle pieces that would affect
-      // corner 1 too, while the combination for corner 1 doesn't use those puzzle pieces.
-      for (const part of combinationCorner2) {
-        if (part.affects.includes(keyCorner1) && !combinationCorner1.find((p) => p.id === part.id)) {
-          return false;
-        }
-      }
-
-      // Checks if a and b use the same puzzle piece(s), but with different positions.
-      // If so, return false.
-      const intersection = intersect(combinationCorner1, combinationCorner2);
-
-      if (!intersection.length) {
-        return true;
-      }
-
-      for (const samePuzzlePieceId of intersection) {
-        const part1 = getPartById(combinationCorner1, samePuzzlePieceId)!;
-        const part2 = getPartById(combinationCorner2, samePuzzlePieceId)!;
-
-        if (part1.position !== part2.position) {
-          return false;
-        }
-      }
-
+    if (signal.aborted) {
+      console.log('Request was aborted with reason:', signal.reason);
       return true;
     }
 
-    function intersect<
-      T1 extends PossiblePuzzlePieceCombination,
-      T2 extends PossiblePuzzlePieceCombination,
-    >(arr1: T1, arr2: T2): (T1 | T2)[number]['id'][] {
-      return arr1
-        .filter((item1) => arr2.find((item2) => item2.id === item1.id))
-        .map((item) => item.id);
-    }
-
-    for (const topLeft of this.cornersInfo!.topLeft.possiblePuzzlePieceCombinations!) {
-      for (const topRight of this.cornersInfo!.topRight.possiblePuzzlePieceCombinations!) {
-        if (!compatible({ topLeft, topRight })) {
-          continue;
-        }
-
-        for (const bottomLeft of this.cornersInfo!.bottomLeft.possiblePuzzlePieceCombinations!) {
-          if (
-            !compatible({ topLeft, bottomLeft })
-            || !compatible({ topRight, bottomLeft })
-          ) {
-            continue;
-          }
-
-          for (const bottomRight of this.cornersInfo!.bottomRight.possiblePuzzlePieceCombinations!) {
-            if (
-              !compatible({ topLeft, bottomRight })
-              || !compatible({ topRight, bottomRight })
-              || !compatible({ bottomLeft, bottomRight })
-            ) {
-              continue;
-            }
-
-            const combination = {
-              topLeft,
-              topRight,
-              bottomLeft,
-              bottomRight,
-            };
-
-            const allPuzzlePiecesAffectingCorners = Object.values(combination)
-              // Throw all puzzle pieces in one array.
-              .flat()
-              // Dedupe by puzzle piece ID. This prevents their 'affects' to be counted multiple times.
-              .filter((item, pos, self) => {
-                return self.findIndex((i) => i.id === item.id) === pos;
-              });
-
-            const allAffected = allPuzzlePiecesAffectingCorners
-              .flatMap((corner) => corner.affects);
-
-            const affectedCounts: Record<CornerType, number> = {
-              topLeft: 0,
-              topRight: 0,
-              bottomLeft: 0,
-              bottomRight: 0,
-            };
-
-            for (const affected of allAffected) {
-              affectedCounts[affected]++;
-            }
-
-            const affectedCountsCompatible = Object.entries(affectedCounts)
-              .every(([cornerType, affectedCount]) => {
-                return this.cornersInfo![cornerType as CornerType].possibleTransforms!.includes(affectedCount);
-              });
-
-            if (!affectedCountsCompatible) {
-              console.log(
-                'Discarded possible solution start, because not all corners are affected by the puzzle pieces the right number of times:',
-                affectedCounts,
-              );
-
-              continue;
-            }
-
-            const possibleSolutionStart = new PossibleSolution(this.targetFigure.value);
-
-            let missingRequiredPuzzlePieces = [...this.puzzlePiecesThatCannotAvoidAnyCorners];
-
-            for (const part of allPuzzlePiecesAffectingCorners) {
-              const puzzlePiece = this.puzzlePieces[part.id];
-
-              missingRequiredPuzzlePieces = missingRequiredPuzzlePieces
-                .filter((p) => p !== part.id);
-
-              possibleSolutionStart.add({
-                id: part.id,
-                position: part.position,
-                grid: puzzlePiece.toEmptyGameBoardWithPuzzlePieceAt(part.position),
-              });
-            }
-
-            if (missingRequiredPuzzlePieces.length) {
-              console.log(
-                'Discarded possible solution start, because not all puzzle pieces that affect corners are used in the corners:',
-                missingRequiredPuzzlePieces,
-              );
-
-              continue;
-            }
-
-            possibleSolutionStart.sortAlphabetically();
-
-            if (this.possibleSolutionStarts.find((other) => possibleSolutionStart.equals(other))) {
-              console.log('Discarded possible solution start (duplicate)');
-              continue;
-            }
-
-            let previousGameBoard = this.gameBoard;
-
-            for (const part of possibleSolutionStart.parts) {
-              part.before = previousGameBoard.clone();
-              part.after = previousGameBoard.stack(this.figuresCount, part.grid);
-              previousGameBoard = part.after;
-            }
-
-            this.possibleSolutionStarts.push(possibleSolutionStart);
-            console.log(`\nAdded new possible solution start (#${this.possibleSolutionStarts.length})`);
-            console.log(possibleSolutionStart.toString());
-          }
-        }
-      }
-    }
-
-    // Sort possible solution starts by length of the array.
-    // We want to brute force the possible solution starts that
-    // have the least amount of possible combinations first.
-    const puzzlePieces = Object.values(this.puzzlePieces);
-    this.possibleSolutionStarts.sort((a, b) => {
-      return a.getContinuationInfo(puzzlePieces).unusedPuzzlePiecesPossibleCombinations
-        - b.getContinuationInfo(puzzlePieces).unusedPuzzlePiecesPossibleCombinations;
-    });
-
-    for (const [index, possibleSolutionStart] of this.possibleSolutionStarts.entries()) {
-      possibleSolutionStart.solutionStartIndex = index;
-
-      for (const part of possibleSolutionStart.parts) {
-        part.partOfPossibleSolutionStart = index;
-      }
-    }
-
-    if (this.possibleSolutionStarts.length > 500) {
-      this.meta.returningMaxOneSolution = true;
-    }
+    return false;
   }
 
-  calculateProduct (arr: number[]) {
-    return arr.reduce((acc, cur) => acc * cur, 1);
-  }
-
-  resultlogSkippedSituations (final = false) {
+  #logSkippedSituations (final = false) {
     const {
       skippedDuplicateSituations: totalSkippedDuplicateSituations,
       skippedImpossibleSituations: totalSkippedImpossibleSituations,
@@ -514,10 +827,19 @@ export class Puzzle {
     // this.#lastSkippedDuplicateSituations = totalSkippedDuplicateSituations;
   }
 
+  #maybeLog (logger: () => unknown, fallbackLogger?: () => unknown) {
+    if (this.#loggingDisabled) {
+      if (fallbackLogger) fallbackLogger();
+      return;
+    }
+
+    logger();
+  }
+
   /**
    * @returns The current memory usage in bytes.
    */
-  getMemoryUsage () {
+  #getMemoryUsage () {
     const memory = process.memoryUsage.rss();
 
     if (memory > this.meta.maxMemoryUsed) {
@@ -528,7 +850,7 @@ export class Puzzle {
     return memory;
   }
 
-  memoryToString (memory: number) {
+  #memoryToString (memory: number) {
     memory /= 1024 ** 2;
     const unit = memory > 1024 ? 'GB' : 'MB';
     return `${numberFormatter.format(unit === 'GB' ? memory / 1024 : memory)} ${unit}`;
@@ -537,16 +859,16 @@ export class Puzzle {
   /**
    * @returns The current memory usage in MB.
    */
-  logMemoryUsage () {
-    const memory = this.getMemoryUsage();
-    console.log('Current memory usage:', this.memoryToString(memory));
+  #logMemoryUsage () {
+    const memory = this.#getMemoryUsage();
+    console.log('Current memory usage:', this.#memoryToString(memory));
     return memory;
   }
 
-  async checkMemoryUsage () {
-    this.logMemoryUsage();
+  async #checkMemoryUsage () {
+    this.#logMemoryUsage();
 
-    // const memory = this.logMemoryUsage();
+    // const memory = this.#logMemoryUsage();
     // if ((memory / 1024) > this.#maxMemoryUsageInGB) {
     //   console.log(`Memory usage is over ${this.#maxMemoryUsageInGB} GB, clearing up space first`);
 
@@ -559,7 +881,7 @@ export class Puzzle {
 
     //   this.meta.reachedMaxMemory = true;
     //   Bun.gc(true);
-    //   this.logMemoryUsage();
+    //   this.#logMemoryUsage();
 
     //   if (!reachedMaxMemoryBefore) {
     //     console.log(heapStats());
@@ -569,7 +891,7 @@ export class Puzzle {
     // }
   }
 
-  milliSecondsToString (ms: number) {
+  #milliSecondsToString (ms: number) {
     // Log seconds, minutes or hours depending on the duration
     if (ms < 1000) {
       return `${numberFormatter.format(ms)} milliseconds`;
@@ -586,299 +908,31 @@ export class Puzzle {
   }
 
   /**
-   * Delay everything that follows this function until the next tick.
-   * This allows Node/Bun to garbage collect and let the event loop run.
+   * This may be used to let the AbortController abort the request
+   * during intensive sync logic.
    */
-  async nextTick () {
-    // When using Node:
-    // Wait for Node's next tick to allow other code to run and console.logs to show.
+  async #nextTick () {
     // await new Promise((resolve) => setImmediate(resolve));
-
-    // When using Bun:
-    // NOTE: Big nope, this slows down everything a LOT. Maybe only do this if memory > x?
-    // Bun.gc(false);
   }
 
-  async *bruteForceSolution ({
-    possibleSolutionStarts = this.possibleSolutionStarts,
-    from = 0,
-    to,
-  } : {
-    possibleSolutionStarts?: PossibleSolution[];
-    from?: number;
-    to?: number;
-  } = {}): AsyncGenerator<boolean> {
-    // Brute force solutions for every "possible solution start"
-    const possibleSolutionStartsCount = possibleSolutionStarts.length;
-    const puzzlePieces = Object.values(this.puzzlePieces);
+  // /**
+  //  * Delay everything that follows this function until the next tick.
+  //  * This allows Node/Bun to garbage collect and let the event loop run.
+  //  * It may also be used to let the AbortController abort the request
+  //  * during intensive sync logic.
+  //  */
+  // async #nextEventLoopTick () {
+  //   // When using Node:
+  //   // Wait for Node's next tick to allow other code to run and console.logs to show.
+  //   // await new Promise((resolve) => setImmediate(resolve));
 
-    const iEnd = Math.min(to ?? possibleSolutionStartsCount, possibleSolutionStartsCount);
+  //   // When using Bun:
+  //   // NOTE: Big nope, this slows down everything a LOT. Maybe only do this if memory > x?
+  //   // Bun.gc(false);
+  // }
 
-    for (let i = from; i < iEnd; i++) {
-      console.log('\nNumber of tried combinations so far:', numberFormatter.format(this.meta.totalNumberOfTriedCombinations));
-      this.resultlogSkippedSituations();
-      await this.checkMemoryUsage();
-
-      const possibleSolutionStart = possibleSolutionStarts[i];
-
-      const {
-        unusedPuzzlePiecesPlacementOptions,
-        unusedPuzzlePiecesCount,
-        unusedPuzzlePiecesPossibleCombinations,
-      } = possibleSolutionStart.getContinuationInfo(puzzlePieces);
-
-      console.log(`\nBrute forcing from possible solution start #${i + 1}/${possibleSolutionStartsCount} (${numberFormatter.format(unusedPuzzlePiecesPossibleCombinations)} possible combinations)`);
-      console.log('Unused puzzle pieces:', unusedPuzzlePiecesCount === 0 ? '-' : `${unusedPuzzlePiecesCount} (${unusedPuzzlePiecesPlacementOptions.map(p => p.puzzlePiece.id).join(', ')})`);
-
-      // If possible solution consist of no possible solution parts,
-      // the solution is: do nothing. In that case, the grid after all changes
-      // is the original game board.
-      const gameBoardSoFar = possibleSolutionStart.finalGameBoard ?? this.gameBoard;
-      gameBoardSoFar.checkIsSolution(this.targetFigure.value);
-
-      console.log('Game board so far:', gameBoardSoFar.toString());
-
-      if (!unusedPuzzlePiecesCount) {
-        console.log('No unused puzzle pieces, checking if we reached a solution already');
-
-        if (gameBoardSoFar.isSolution) {
-          console.log('Found solution!');
-          console.log(possibleSolutionStart.toString());
-          this.meta.totalNumberOfTriedCombinations++;
-          this.solutions.push(possibleSolutionStart);
-
-          // this.resultlogSkippedSituations();
-          yield true;
-
-          if (this.meta.returningMaxOneSolution) {
-            console.log('Returning max one solution, stopping the brute force');
-            return;
-          }
-
-          continue;
-        }
-
-        console.log('No solutions found for this possible solution start');
-        // this.resultlogSkippedSituations();
-        yield false;
-        continue;
-      }
-
-      const gameBoard = gameBoardSoFar.clone();
-
-      const shouldAbort = this.calculatedSameSituationBefore(unusedPuzzlePiecesPlacementOptions.map(p => p.puzzlePiece), gameBoard);
-
-      if (shouldAbort) {
-        console.log(`Had the same grid with the same unused puzzle pieces before, skipping this entire possible solution start.`);
-        this.meta.skippedDuplicateSituations += unusedPuzzlePiecesPossibleCombinations;
-        // this.resultlogSkippedSituations();
-        yield false;
-        continue;
-      }
-
-      const currentPuzzlePiecePlacementOptions = unusedPuzzlePiecesPlacementOptions.shift()!;
-
-      // const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-      for (const possibleSolution of this.puzzlePiecePlacementOptionsIterator({
-        gameBoard,
-        baseSolution: possibleSolutionStart,
-        current: currentPuzzlePiecePlacementOptions,
-        next: unusedPuzzlePiecesPlacementOptions,
-      })) {
-        // await this.nextTick();
-        // await wait(1000);
-
-        this.meta.totalNumberOfTriedCombinations++;
-
-        if (possibleSolution.isSolution()) {
-          console.log('Found solution!');
-          console.log(possibleSolution.toString());
-          this.solutions.push(possibleSolution);
-          yield true;
-
-          if (this.meta.returningMaxOneSolution) {
-            console.log('Returning max one solution, stopping.');
-            return;
-          }
-
-          continue;
-        }
-      }
-
-      // this.resultlogSkippedSituations();
-    }
-
-    this.saveCalculationDuration();
-    console.log('\n-----------------------------------');
-    console.log('Total number of tried combinations:', numberFormatter.format(this.meta.totalNumberOfTriedCombinations));
-    this.resultlogSkippedSituations(true);
-    console.log('Total time to calculate solution:', this.milliSecondsToString(this.meta.calculationDuration));
-    console.log('Max memory used:', this.memoryToString(this.meta.maxMemoryUsed));
-
-    // type PerfType = keyof typeof this.perf;
-    // const loggedPerfTypes: PerfType[] = [
-    //   'calculatedSameSituationBefore',
-    // ];
-
-    // for (const [k, v] of Object.entries(this.perf)) {
-    //   if (!loggedPerfTypes.includes(k as PerfType)) {
-    //     continue;
-    //   }
-
-    //   const total = v.reduce((a, b) => a + b, 0);
-    //   console.log(`\nAverage time spent in ${k}: ${total / v.length} ms`);
-    //   console.log(`Total time spent in ${k}: ${total} ms`);
-    // }
-  }
-
-  /**
-   * Indicates whether we ran into this exact situation before, so
-   * with the same game board grid and the same puzzle pieces left.
-   *
-   * NOTE: Don't use this during the brute force, as saving every
-   * situation takes up so much memory, that the script will just
-   * crash at some point.
-   */
-  calculatedSameSituationBefore (puzzlePieces: PuzzlePiece[], gameBoard: GameBoard): boolean {
-    // IDEA: Represent every puzzle piece using a binary code. The number of bits should be equal to the number of puzzle pieces.
-    // Then we can create a bitmask that represents which puzzle pieces have been used and which ones haven't.
-
-    const key = `${puzzlePieces.map(p => p.id).join('')}${gameBoard.toShortString()}`;
-
-    if (this.#uniqueSituations.has(key)) {
-      return true;
-    }
-
-    this.#uniqueSituations.add(key);
-    return false;
-  }
-
-  *puzzlePiecePlacementOptionsIterator({
-    gameBoard,
-    baseSolution,
-    current,
-    next,
-  }: {
-    gameBoard: GameBoard;
-    baseSolution: PossibleSolution;
-    current: PuzzlePiecePlacementOptions;
-    next: PuzzlePiecePlacementOptions[];
-  }): Generator<PossibleSolution> {
-    const { puzzlePiece, possiblePositions } = current;
-    const possiblePositionCount = possiblePositions.length;
-
-    // console.log('Now trying multiple placements of puzzle piece:', puzzlePiece.id);
-
-    for (let i = 0; i < possiblePositionCount; i++) {
-      // const p0 = performance.now();
-
-      const position = possiblePositions[i];
-      const grid = puzzlePiece.toEmptyGameBoardWithPuzzlePieceAt(position);
-      // const p1 = performance.now();
-
-      const before = gameBoard.clone();
-      // const p2 = performance.now();
-
-      const after = gameBoard.stack(this.figuresCount, grid);
-      // const p3 = performance.now();
-
-      // const shouldAbort = this.calculatedSameSituationBefore(next.map(p => p.puzzlePiece), after);
-      // const p4 = performance.now();
-
-      // this.perf.toEmptyGameBoardWithPuzzlePieceAt.push(p1 - p0);
-      // this.perf.clone.push(p2 - p1);
-      // this.perf.stack.push(p3 - p2);
-      // this.perf.calculatedSameSituationBefore.push(p4 - p3);
-
-      // if (shouldAbort) {
-      //   this.meta.skippedDuplicateSituations += this.calculateProduct(next.map(p => p.possiblePositions.length));
-      //   continue;
-      // }
-
-      const result = baseSolution.cloneWith([
-        {
-          id: puzzlePiece.id,
-          position,
-          grid,
-          before,
-          after,
-        },
-      ]);
-
-      const afterCorrectCellsCount = after.countValue(this.targetFigure.value);
-      const afterIncorrectCellsCount = after.cells - afterCorrectCellsCount;
-      const nextLevelsMaxInfluencedCells = next.reduce((acc, p) => acc + p.puzzlePiece.cellsInfluenced, 0);
-      const canBeSolvedFromHereOn = afterIncorrectCellsCount <= nextLevelsMaxInfluencedCells;
-
-      if (!canBeSolvedFromHereOn) {
-        // console.log(`Placed puzzle piece ${puzzlePiece.id} at ${position}, but unsolvable situation found:`, {
-        //   afterCorrectCellsCount,
-        //   afterIncorrectCellsCount,
-        //   nextLevelsMaxInfluencedCells,
-        //   canBeSolvedFromHereOn,
-        // });
-
-        this.meta.skippedImpossibleSituations += next.length;
-        continue;
-      }
-
-      // If there are more levels, proceed to the next level, yield that
-      // level's result and continue with the next possible position of
-      // the current puzzle piece.
-      if (next.length) {
-        const [newCurrent, ...newNext] = next;
-
-        // console.log('Going a level deeper into puzzle piece:', newCurrent.puzzlePiece.id, {
-        //   next: newNext.map(p => ({
-        //     id: p.puzzlePiece.id,
-        //     possiblePositions: p.possiblePositions.length,
-        //   })),
-        // });
-
-        // TODO: REVIEW: I have no idea what I'm doing. Can't grasp how the recursion here works and if this is the right place to do this.
-        // TODO: Also, this can be more generic. Calculate the number of cells that all next puzzle pieces combined can influence. If that number is less than the number of incorrect cells, skip <insert-whatever-the-fuck-we-have-to-skip>.
-        // If only one puzzle piece is left, we can check if the game board
-        // could still be solved with the remaining puzzle piece and skip
-        // iterating further if it's impossible.
-        // if (newNext.length === 1) {
-        //   const afterIncorrectCellsCount = after.cells - after.countValue(this.targetFigure.value);
-
-        //   if (afterIncorrectCellsCount > newNext[0].puzzlePiece.cellsInfluenced) {
-        //     // console.log({
-        //     //   afterIncorrectCellsCount,
-        //     //   newNextLevelPuzzlePieceCellsInfluenced: newNext[0].puzzlePiece.cellsInfluenced,
-        //     // });
-        //     this.meta.skippedImpossibleSituations += newNext[0].possiblePositions.length;
-        //     continue;
-        //   }
-        // }
-
-        // NOTE: It might be possible to replace this with `yield* this.puzzlePiecePlacementOptionsIterator({...})`.
-        // See: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/yield*
-        for (const nestedResult of this.puzzlePiecePlacementOptionsIterator({
-          gameBoard: after,
-          baseSolution: result,
-          current: newCurrent,
-          next: newNext,
-        })) {
-          yield nestedResult;
-        }
-
-        // console.log(`Tried all placements of puzzle piece ${newCurrent.puzzlePiece.id} with this placement of puzzle piece ${puzzlePiece.id}`);
-
-        // Prevent yielding the result of the current level, while we
-        // still have deeper levels to go through.
-        continue;
-      }
-
-      // Only on the final level, yield the result up all the way to the top.
-      yield result;
-    }
-  }
-
-  saveCalculationDuration () {
-    this.#perf.tEnd = performance.now();
-    this.meta.calculationDuration = this.#perf.tEnd - this.#perf.tStart;
+  #saveCalculationDuration () {
+    this.#timings.tEnd = performance.now();
+    this.meta.calculationDuration = this.#timings.tEnd - this.#timings.tStart;
   }
 }
