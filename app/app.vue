@@ -6,7 +6,10 @@
 
     <div>
       <p>Paste Neopets HTML:</p>
-      <textarea @paste="onPaste"></textarea>
+      <div class="f">
+        <textarea rows="6" cols="40" @paste="onPaste" placeholder="Neopets HTML input"></textarea>
+        <textarea rows="6" cols="40" readonly v-model="puzzleOptionsStringified" placeholder="Formatted to API input"></textarea>
+      </div>
     </div>
 
     <h1>{{ !result ? 'Paste Neopets HTML or click Calculate to get started with a fallback' : pending ? 'Loading results...' : 'Results' }}</h1>
@@ -20,6 +23,7 @@
       <br>
       <p><strong>{{ numberFormatter.format(result.meta.totalNumberOfPossibleCombinations) }}</strong> possible puzzle piece combinations in total</p>
       <p><strong>{{ numberFormatter.format(result.meta.totalNumberOfTriedCombinations) }}</strong> puzzle piece combinations tried</p>
+      <p><strong>{{ numberFormatter.format(result.meta.totalNumberOfIteratorPlacementAttempts) }}</strong> puzzle piece placement attempts</p>
       <p><strong>{{ numberFormatter.format(result.meta.skippedDuplicateSituations) }}</strong> combinations skipped due to duplicate situations</p>
       <p><strong>{{ numberFormatter.format(result.meta.skippedImpossibleSituations) }}</strong> combinations skipped due to impossible situations</p>
 
@@ -81,10 +85,15 @@
             v-for="(solution, index) of result.solutions"
             :key="index"
             :nth="index + 1"
+            :only="result.solutions.length === 1"
             :solution="solution"
           />
         </template>
       </details>
+    </div>
+    <div v-else-if="error">
+      <h2>Error</h2>
+      <pre>{{ error }}</pre>
     </div>
   </div>
 </template>
@@ -96,10 +105,29 @@ import type { Puzzle } from '#build/types/nitro-imports';
 const result = ref<Puzzle>();
 const resultHash = ref<string>();
 const pending = ref(false);
+const error = ref<string>();
 
 const showPossibleSolutionStarts = ref(false);
 
 const puzzleOptions = ref<PuzzleOptions>();
+
+const puzzleOptionsStringified = computed(() => {
+  if (!puzzleOptions.value) return '';
+
+  const { figures, gameBoard, puzzlePieces } = puzzleOptions.value;
+
+  return `{
+  figures: ${JSON.stringify(figures).replaceAll('"', "'")},
+  gameBoard: [
+    ${gameBoard.map(row => `[${row.join(', ')}]`).join(',\n    ')},
+  ],
+  puzzlePieces: [
+    ${puzzlePieces.map(piece => `[
+      ${piece.map(row => `[${row.join(', ')}],`).join('\n      ')}
+    ]`).join(',\n    ')},
+  ],
+}`;
+});
 
 // NOTE: Websockets are not working in Bun somehow. Status keeps being 'CONNECTING'.
 // const {
@@ -130,6 +158,7 @@ function onPaste (event: ClipboardEvent) {
 let controller: AbortController;
 
 async function calculate () {
+  error.value = undefined;
   pending.value = true;
 
   // NOTE: Unfortunately, canceling a request does not stop the calculation in the backend yet.
@@ -152,6 +181,10 @@ async function calculate () {
     retryDelay: 0,
     signal: controller.signal,
     ...(puzzleOptions.value ? { body: puzzleOptions.value } : {}),
+  }).catch((e) => {
+    error.value = JSON.stringify(e.data.data, null, 2);
+    result.value = undefined;
+    throw e;
   });
 
   resultHash.value = await hashObject(response);

@@ -1,5 +1,5 @@
 <template>
-  <details>
+  <details :open="only">
     <summary>
       <h3>Solution #{{ nth }} — based on possible solution start #{{ solution.solutionStartIndex! + 1 }}</h3>
     </summary>
@@ -7,7 +7,7 @@
     <h4>Puzzle pieces (before — placement — after):</h4>
     <p v-if="!solution.parts.length">None.</p>
     <template v-else>
-      <input type="checkbox" :id="sortCheckboxId" v-model="showSorted" /> <label :for="sortCheckboxId">Sort by original order</label>
+      <input type="checkbox" :id="sortCheckboxId" v-model="showSorted" /> <label :for="sortCheckboxId">Sort by puzzle piece order (note that "after" may look weird, because of differences in stacking order)</label>
       <template
         v-for="(part, index) of parts"
         :key="part.id"
@@ -41,6 +41,7 @@ const {
   solution,
 } = defineProps<{
   nth: number;
+  only: boolean;
   solution: PossibleSolution;
 }>();
 
