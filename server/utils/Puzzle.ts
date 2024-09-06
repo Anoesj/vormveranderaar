@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 // import { heapStats } from 'bun:jsc';
 // import { generateHeapSnapshot } from 'bun';
 // import { setFlagsFromString } from 'v8';
@@ -120,6 +122,8 @@ export class Puzzle {
   }, abortController: AbortController) {
     console.log('\nYum, a puzzle to chew on!');
 
+    this.#validate(options);
+
     this.#abortController = abortController;
 
     this.figures = options.figures.map((name, index) => new Figure(name, index));
@@ -164,6 +168,14 @@ export class Puzzle {
     this.#getMinimumTransformsNeededForCorners();
     this.#getPossibleTransformsForCorners();
     this.#getPuzzlePiecesWithActiveCorners();
+  }
+
+  #validate (options: ConstructorParameters<typeof Puzzle>[0]) {
+    z.object({
+      figures: z.array(z.union([z.string(), z.number()])),
+      gameBoard: z.array(z.array(z.number().nonnegative())),
+      puzzlePieces: z.array(z.array(z.array(z.union([z.literal(0), z.literal(1)])))),
+    }).parse(options);
   }
 
   // NOTE: Async so we can hopefully interrupt this function with the this.#abortController later on.

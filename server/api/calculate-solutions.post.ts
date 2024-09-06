@@ -50,9 +50,19 @@ export default defineEventHandler(async (event) => {
   //   'Transfer-Encoding': 'chunked',
   // });
 
-  const puzzle = new Puzzle(puzzleOptions, abortController);
-  await puzzle.preparePossibleSolutionStarts();
-  await puzzle.bruteForceSolution();
+  let puzzle: InstanceType<typeof Puzzle>;
+
+  try {
+    puzzle = new Puzzle(puzzleOptions, abortController);
+    // await puzzle.preparePossibleSolutionStarts();
+    await puzzle.bruteForceSolution();
+  }
+  catch (err) {
+    throw createError({
+      statusCode: 400,
+      data: err,
+    });
+  }
 
   // function writeChunk() {
   //   // res.write(JSON.stringify(puzzle, null, 2));
@@ -63,7 +73,7 @@ export default defineEventHandler(async (event) => {
 
   // const iterator = puzzle.bruteForceSolution();
   // // const iterator = puzzle.bruteForceSolution({ from: 747, to: 748 });
-  // // // const iterator = puzzle.bruteForceSolution({ from: 387, to: 388 });
+  // // const iterator = puzzle.bruteForceSolution({ from: 387, to: 388 });
 
   // // // const t0 = performance.now();
   // for await (const _success of iterator) {
