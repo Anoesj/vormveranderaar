@@ -52,6 +52,7 @@ export default defineEventHandler(async (event) => {
 
   const puzzle = new Puzzle(puzzleOptions, abortController);
   await puzzle.preparePossibleSolutionStarts();
+  await puzzle.bruteForceSolution();
 
   // function writeChunk() {
   //   // res.write(JSON.stringify(puzzle, null, 2));
