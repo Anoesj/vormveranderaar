@@ -43,13 +43,8 @@ export class PossibleSolution {
   }
 
   cloneWith (appendedParts: PossibleSolutionPart[]) {
-    const cloned = new PossibleSolution(this.targetValue, [
-      ...this.parts,
-      ...appendedParts,
-    ]);
-
+    const cloned = new PossibleSolution(this.targetValue, this.parts.concat(appendedParts));
     cloned.solutionStartIndex = this.solutionStartIndex;
-
     return cloned;
   }
 
