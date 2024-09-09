@@ -1,12 +1,15 @@
 <template>
   <div>
-    <button @click="testSse">Test SSE</button>
+    <button @click="startSse">Start SSE</button>
+    <button @click="cancelSse">Cancel SSE</button>
 
     <button v-if="!pending" @click="calculate">Calculate</button>
     <button v-else @click="cancel">Cancel</button>
     <button @click="print">Print</button>
 
     <div>
+      <h2>SSE events</h2>
+      <p v-for="(message, index) of messages" :key="index">{{ message }}</p>
       <p>Paste Neopets HTML:</p>
       <div class="f">
         <textarea rows="6" cols="40" @paste="onPaste" placeholder="Neopets HTML input"></textarea>
@@ -101,7 +104,9 @@
 </template>
 
 <script setup lang="ts">
+// import { useEventSource } from '@vueuse/core';
 // import { useWebSocket } from '@vueuse/core';
+
 import type { Puzzle } from '#build/types/nitro-imports';
 
 const result = ref<Puzzle>();
@@ -129,9 +134,35 @@ const puzzleOptionsStringified = usePuzzleOptionsStringified(puzzleOptions);
 //   console.log(newVal);
 // });
 
-async function testSse () {
-  console.log(await $fetch('/api/sse'));
+const messages = ref<string[]>([]);
+
+let eventSource: EventSource | undefined;
+
+function startSse () {
+  eventSource = new EventSource(`/api/sse?puzzle=${encodeURIComponent(JSON.stringify(puzzleOptions.value))}`);
+
+  eventSource.onmessage = (event) => {
+    messages.value.push(event.data);
+  }
+
+  // Handle potential errors
+  eventSource.onerror = (error) => {
+    console.error('SSE error:', error);
+    // Optionally, you can close the connection if needed
+    // eventSource.close();
+  }
 }
+
+function cancelSse () {
+  if (eventSource) {
+    console.log('Closing SSE connection');
+    eventSource.close();
+  }
+}
+
+onUnmounted(() => {
+  cancelSse();
+});
 
 function onPaste (event: ClipboardEvent) {
   const html = event.clipboardData?.getData('text/plain');
@@ -141,7 +172,7 @@ function onPaste (event: ClipboardEvent) {
   }
 
   puzzleOptions.value = parseNeopetsHtml(html);
-  calculate();
+  // calculate();
 }
 
 let controller: AbortController;

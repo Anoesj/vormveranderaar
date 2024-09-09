@@ -41,7 +41,7 @@ export default defineEventHandler(async (event) => {
   //   // process.exit(1);
   // });
 
-  const puzzleOptions = body || PuzzleLibrary.level10;
+  const puzzleOptions = body || PuzzleLibrary.p18;
 
   // // NOTE: Instead of chunked transfers, we can use SSE (https://h3.unjs.io/guide/websocket#server-sent-events-sse), web sockets or JSON streaming.
   // res.writeHead(200, {
