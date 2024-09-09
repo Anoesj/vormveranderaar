@@ -3,6 +3,9 @@
 - `bun i`
 - `bun --bun run dev` to start Nuxt. The `--bun` flag will force Nuxt to use `bun` instead of `node`.
 
+## Building the app
+- `bun --bun run build` to build the app.
+
 ## Technical info
 ### Solving the puzzle
 Todo
