@@ -1,6 +1,6 @@
 <template>
   <div>
-    <button @click="testSse">Test SSE</button>
+    <p>{{ status }}</p>
 
     <button v-if="!pending" @click="calculate">Calculate</button>
     <button v-else @click="cancel">Cancel</button>
@@ -101,7 +101,7 @@
 </template>
 
 <script setup lang="ts">
-// import { useWebSocket } from '@vueuse/core';
+import { useWebSocket } from '@vueuse/core';
 import type { Puzzle } from '#build/types/nitro-imports';
 
 const result = ref<Puzzle>();
@@ -115,23 +115,19 @@ const puzzleOptions = ref<PuzzleOptions>();
 const puzzleOptionsStringified = usePuzzleOptionsStringified(puzzleOptions);
 
 // NOTE: Websockets are not working in Bun somehow. Status keeps being 'CONNECTING'.
-// const {
-//   status,
-//   data,
-//   send,
-// } = useWebSocket(`ws://${location.host}/api/ws`);
+const {
+  status,
+  data,
+  send,
+} = useWebSocket(`ws://${location.host}/api/ws`);
 
-// watch(status, (newVal) => {
-//   console.log('WebSocket status:', newVal); // Log WebSocket state
-// }, { immediate: true });
+watch(status, (newVal) => {
+  console.log('WebSocket status:', newVal); // Log WebSocket state
+}, { immediate: true });
 
 // watch(data, (newVal) => {
 //   console.log(newVal);
 // });
-
-async function testSse () {
-  console.log(await $fetch('/api/sse'));
-}
 
 function onPaste (event: ClipboardEvent) {
   const html = event.clipboardData?.getData('text/plain');

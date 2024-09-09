@@ -9,7 +9,13 @@ export default defineNuxtConfig({
   modules: [
     '@nuxt/test-utils/module',
     '@nuxt/eslint',
+    '@nuxtjs/tailwindcss',
+    'shadcn-nuxt',
   ],
+  shadcn: {
+    prefix: '',
+    componentDir: './app/components/ui',
+  },
   nitro: {
     preset: 'bun',
     experimental: {
