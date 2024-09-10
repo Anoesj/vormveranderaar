@@ -12,7 +12,7 @@
         </CardContent>
         <CardFooter>
           <Button
-            v-if="!pending"
+            v-if="pending !== 'input'"
             @click="calculate(puzzleOptions)"
             class="w-full"
             :disabled="!puzzleOptions"
@@ -29,7 +29,7 @@
         </CardContent>
         <CardFooter>
           <Button
-            v-if="!pending"
+            v-if="pending !== 'fallback'"
             variant="secondary"
             @click="calculate()"
             class="w-full"
@@ -55,12 +55,12 @@
       </Card>
     </div>
 
-    <h1 v-if="pending || result" class="h1">
+    <h1 v-if="pending || result">
       {{ pending ? 'Loading results...' : 'Results' }}
     </h1>
 
     <div v-if="result" :key="resultHash" class="wrapper">
-      <h2 class="h2">Info</h2>
+      <h2>Info</h2>
       <p>{{ result.solutions.length > 0 ? '✅' : '❌' }} <strong>{{ result.solutions.length > 0 ? `${result.solutions.length} solution${result.solutions.length > 1 ? 's' : ''} found` : 'no solution found' }}</strong></p>
       <p>ℹ️ <strong>{{ result.meta.returningMaxOneSolution ? 'Maximum of one solution returned for better performance' : 'Looked for all possible solutions' }}</strong></p>
       <p>⏱️ <strong>{{ formatDuration(result.meta.calculationDuration) }}</strong> to calculate the situation</p>
@@ -72,20 +72,20 @@
       <p><strong>{{ numberFormatter.format(result.meta.skippedDuplicateSituations) }}</strong> combinations skipped due to duplicate situations</p>
       <p><strong>{{ numberFormatter.format(result.meta.skippedImpossibleSituations) }}</strong> combinations skipped due to impossible situations</p>
 
-      <h2 class="h2">Game board</h2>
+      <h2>Game board</h2>
       <div class="f">
         <Grid :grid="result.gameBoard" />
         ➡️
         <Grid :grid="result.gameBoard" :replaceAllWith="result.targetFigure.value" />
       </div>
 
-      <details>
-        <summary>
-          <h2 class="h2">
+      <Details class="mt-8">
+        <template #summary>
+          <h2>
             Puzzle pieces ({{ Object.keys(result.puzzlePieces).length }})
           </h2>
-        </summary>
-        <div class="g">
+        </template>
+        <div class="g overflow-x-auto">
           <div
             v-for="puzzlePiece of result.puzzlePieces"
             :key="puzzlePiece.id"
@@ -95,14 +95,14 @@
             <Grid :grid="puzzlePiece.grid" isPuzzlePieceGrid />
           </div>
         </div>
-      </details>
+      </Details>
 
-      <details @toggle="showPossibleSolutionStarts = $event.newState === 'open'">
-        <summary>
-          <h2 class="h2">
+      <Details @toggle="showPossibleSolutionStarts = $event">
+        <template #summary>
+          <h2>
             Phase 1: possible solution starts based on correct corner outputs ({{ numberFormatter.format(result.possibleSolutionStarts.length) }})
           </h2>
-        </summary>
+        </template>
 
         <template v-if="showPossibleSolutionStarts">
           <p v-if="!result.possibleSolutionStarts.length">
@@ -118,12 +118,12 @@
             />
           </template>
         </template>
-      </details>
+      </Details>
 
-      <details open>
-        <summary>
-          <h2 class="h2">Phase 2: solutions ({{ numberFormatter.format(result.solutions.length) }}{{ result.meta.returningMaxOneSolution ? ' — maximized at one' : '' }})</h2>
-        </summary>
+      <Details open>
+        <template #summary>
+          <h2>Phase 2: solutions ({{ numberFormatter.format(result.solutions.length) }}{{ result.meta.returningMaxOneSolution ? ' — maximized at one' : '' }})</h2>
+        </template>
         <p v-if="!result.solutions.length">No solutions possible.</p>
         <template v-else>
           <Solution
@@ -134,7 +134,7 @@
             :solution="solution"
           />
         </template>
-      </details>
+      </Details>
 
       <Button
         size="lg"
@@ -155,7 +155,7 @@ import type { PuzzleOptions } from '~~/server/utils/PuzzleLibrary';
 
 const result = ref<Puzzle>();
 const resultHash = ref<string>();
-const pending = ref(false);
+const pending = ref<false | 'input' | 'fallback'>(false);
 const error = ref<string>();
 
 const showPossibleSolutionStarts = ref(false);
@@ -178,7 +178,7 @@ let controller: AbortController;
 
 async function calculate (payload?: PuzzleOptions) {
   error.value = undefined;
-  pending.value = true;
+  pending.value = payload ? 'input' : 'fallback';
 
   // NOTE: Unfortunately, canceling a request does not stop the calculation in the backend.
   // You can't solve it at all, even with WebSockets/SSE. What a great day.
@@ -216,15 +216,33 @@ function cancel() {
 function print() {
   window.print();
 }
+
+// <link rel="preconnect" href="https://fonts.googleapis.com">
+// <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+// <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:ital,wght@0,100..700;1,100..700&display=swap" rel="stylesheet">
+
+useHead({
+  title: 'Neopets Shapeshifter Solver',
+  meta: [
+    { name: 'description', content: 'Solve puzzles' },
+  ],
+  link: [
+    { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
+    { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
+    { href: 'https://fonts.googleapis.com/css2?family=Urbanist:ital,wght@0,100..900;1,100..900&display=swap', rel: 'stylesheet' },
+  ],
+});
 </script>
 
 <style lang="scss">
 @import '@/assets/css/tailwind.css';
 
-// html {
-//   font-size: 14px;
-//   font-family: system-ui;
-// }
+html {
+  font-family: "Urbanist", sans-serif;
+  font-optical-sizing: auto;
+  font-size: 20px;
+  line-height: 1.8;
+}
 
 // details summary :is(h2, h3) {
 //   display: inline-block;
@@ -235,12 +253,28 @@ function print() {
 //   padding-left: 0;
 // }
 
-.h1 {
+h1 {
   @apply wrapper text-3xl font-bold leading-10;
 }
 
-.h2 {
+h2 {
   @apply text-xl font-bold leading-8;
+
+  &:not(:first-child) {
+    @apply mt-6;
+  }
+}
+
+h3 {
+  @apply text-lg font-bold leading-8;
+}
+
+details summary h3 {
+  @apply text-base font-normal;
+}
+
+h4 {
+  @apply text-base font-bold leading-8;
 }
 
 .wrapper {

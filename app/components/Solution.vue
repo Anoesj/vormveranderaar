@@ -1,8 +1,8 @@
 <template>
-  <details :open="only">
-    <summary>
+  <Details :open="only">
+    <template #summary>
       <h3>Solution #{{ nth }} — based on possible solution start #{{ solution.solutionStartIndex! + 1 }}</h3>
-    </summary>
+    </template>
 
     <h4>Puzzle pieces (before — placement — after):</h4>
     <p v-if="!solution.parts.length">None.</p>
@@ -30,7 +30,7 @@
         </div>
       </template>
     </template>
-  </details>
+  </Details>
 </template>
 
 <script setup lang="ts">

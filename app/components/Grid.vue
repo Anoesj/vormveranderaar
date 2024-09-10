@@ -1,6 +1,6 @@
 <template>
   <table
-    class="grid"
+    class="border-collapse table-fixed"
     :class="{
       'grid--puzzle-piece': isPuzzlePieceGrid,
     }"
@@ -12,12 +12,14 @@
       <td
         v-for="(colVal, colIndex) of row"
         :key="colIndex"
-        :class="{
+        :class="[{
           'puzzle-piece-active-cell': isPuzzlePieceGrid && colVal,
           [`figure--${colVal}`]: !isPuzzlePieceGrid,
-        }"
+        }, 'border border-foreground leading-none relative text-center']"
       >
-        <slot :value="colVal">{{ colVal }}</slot>
+        <div class="w-10 h-10 p-3 flex items-center justify-center">
+          <slot :value="colVal">{{ colVal }}</slot>
+        </div>
       </td>
     </tr>
   </table>
@@ -47,14 +49,7 @@ const gridData = computed(() => {
 </script>
 
 <style>
-.grid {
-  border-collapse: collapse;
-
-  td {
-    border: 1px solid black;
-    padding: 6px 10px;
-  }
-
+table {
   &.grid--puzzle-piece td {
     &.puzzle-piece-active-cell {
       background-color: rgb(62, 62, 62);

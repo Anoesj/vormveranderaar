@@ -1,8 +1,8 @@
 <template>
-  <details>
-    <summary>
+  <Details>
+    <template #summary>
       <h3>Possible solution start #{{ nth }} — {{ puzzlePiecesUsedCount }}/{{ totalPuzzlePiecesCount }} puzzle pieces — {{ state.emoji }} {{ state.explanation }}{{ state.type === 'incomplete' && possibleSolutionStart.continuationInfo ? ` — ${numberFormatter.format(possibleSolutionStart.continuationInfo.unusedPuzzlePiecesPossibleCombinations)} possible combinations` : '' }}</h3>
-    </summary>
+    </template>
 
     <h4>Summary:</h4>
     <ul>
@@ -37,7 +37,7 @@
         </div>
       </template>
     </template>
-  </details>
+  </Details>
 </template>
 
 <script setup lang="ts">
