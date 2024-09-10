@@ -250,17 +250,17 @@ export class Puzzle {
     }
 
     for (const topLeft of this.cornersInfo!.topLeft.possiblePuzzlePieceCombinations!) {
-      if (await this.#checkRequestIsCanceled()) return;
+      // if (await this.#checkRequestIsCanceled()) return;
 
       for (const topRight of this.cornersInfo!.topRight.possiblePuzzlePieceCombinations!) {
-        if (await this.#checkRequestIsCanceled()) return;
+        // if (await this.#checkRequestIsCanceled()) return;
 
         if (!compatible({ topLeft, topRight })) {
           continue;
         }
 
         for (const bottomLeft of this.cornersInfo!.bottomLeft.possiblePuzzlePieceCombinations!) {
-          if (await this.#checkRequestIsCanceled()) return;
+          // if (await this.#checkRequestIsCanceled()) return;
 
           if (
             !compatible({ topLeft, bottomLeft })
@@ -270,7 +270,7 @@ export class Puzzle {
           }
 
           for (const bottomRight of this.cornersInfo!.bottomRight.possiblePuzzlePieceCombinations!) {
-            if (await this.#checkRequestIsCanceled()) return;
+            // if (await this.#checkRequestIsCanceled()) return;
 
             if (
               !compatible({ topLeft, bottomRight })
@@ -508,7 +508,7 @@ export class Puzzle {
       const currentPuzzlePiecePlacementOptions = unusedPuzzlePiecesPlacementOptions.shift()!;
 
 
-      for (const possibleSolution of this.#puzzlePiecePlacementOptionsIterator({
+      for await (const possibleSolution of this.#puzzlePiecePlacementOptionsIterator({
         gameBoard,
         baseSolution: possibleSolutionStart,
         current: currentPuzzlePiecePlacementOptions,
@@ -574,7 +574,7 @@ export class Puzzle {
     console.log('Time to brute force the puzzle:', this.#milliSecondsToString(this.#timings.tBruteForceEnd! - this.#timings.tBruteForceStart!));
   }
 
-  *#puzzlePiecePlacementOptionsIterator({
+  async *#puzzlePiecePlacementOptionsIterator({
     gameBoard,
     baseSolution,
     current,
@@ -584,11 +584,12 @@ export class Puzzle {
     baseSolution: PossibleSolution;
     current: PuzzlePiecePlacementOptions;
     next: PuzzlePiecePlacementOptions[];
-  }): Generator<PossibleSolution> {
+  }): AsyncGenerator<PossibleSolution> {
     const { puzzlePiece, possiblePositions } = current;
     const possiblePositionCount = possiblePositions.length;
 
     for (let i = 0; i < possiblePositionCount; i++) {
+      if (await this.#checkRequestIsCanceled()) return;
       this.meta.totalNumberOfIteratorPlacementAttempts++;
 
       // const p0 = performance.now();
@@ -671,12 +672,14 @@ export class Puzzle {
 
         // Let another iterator yield for us. This "iterator recursion"
         // will be repeated until we reach the final level.
-        yield* this.#puzzlePiecePlacementOptionsIterator({
+        for await (const nestedResult of this.#puzzlePiecePlacementOptionsIterator({
           gameBoard: after,
           baseSolution: result,
           current: newCurrent!,
           next: newNext,
-        });
+        })) {
+          yield nestedResult;
+        }
 
         // Prevent yielding the result of the current level, while we
         // still have deeper levels to go through.

@@ -1,23 +1,67 @@
 <template>
-  <div>
-    <p>{{ status }}</p>
+  <div class="flex flex-col gap-6 py-8">
+    <div class="wrapper flex gap-4">
+      <Card class="flex-1">
+        <CardHeader>
+          <CardTitle>Input</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div class="flex items-center gap-4">
+            <Textarea rows="4" cols="40" @paste="onPaste" placeholder="Neopets HTML input"/>
+          </div>
+        </CardContent>
+        <CardFooter>
+          <Button
+            v-if="!pending"
+            @click="calculate(puzzleOptions)"
+            class="w-full"
+            :disabled="!puzzleOptions || (useWebSocketToCalculate && status === 'CONNECTING')"
+          >Calculate</Button>
+          <Button
+            v-else
+            variant="destructive"
+            @click="cancel"
+            class="w-full"
+          >Cancel</Button>
+        </CardFooter>
+        <CardContent class="mt-[-1rem] pb-1">
+          <Separator class="my-4" label="Or" />
+        </CardContent>
+        <CardFooter>
+          <Button
+            v-if="!pending"
+            variant="secondary"
+            @click="calculate()"
+            class="w-full"
+            :disabled="useWebSocketToCalculate && status === 'CONNECTING'"
+          >Calculate fallback</Button>
+          <Button
+            v-else
+            variant="destructive"
+            @click="cancel"
+            class="w-full"
+          >Cancel</Button>
+        </CardFooter>
+      </Card>
 
-    <button v-if="!pending" @click="calculate">Calculate</button>
-    <button v-else @click="cancel">Cancel</button>
-    <button @click="print">Print</button>
-
-    <div>
-      <p>Paste Neopets HTML:</p>
-      <div class="f">
-        <textarea rows="6" cols="40" @paste="onPaste" placeholder="Neopets HTML input"></textarea>
-        <textarea rows="6" cols="40" readonly v-model="puzzleOptionsStringified" placeholder="Formatted to API input"></textarea>
-      </div>
+      <Card class="flex-1">
+        <CardHeader>
+          <CardTitle>Output</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div class="flex items-center gap-4">
+            <Textarea rows="9" cols="40" readonly v-model="puzzleOptionsStringified" placeholder="Formatted to API input"/>
+          </div>
+        </CardContent>
+      </Card>
     </div>
 
-    <h1>{{ !result ? 'Paste Neopets HTML or click Calculate to get started with a fallback' : pending ? 'Loading results...' : 'Results' }}</h1>
+    <h1 v-if="pending || result" class="h1">
+      {{ pending ? 'Loading results...' : 'Results' }}
+    </h1>
 
-    <div v-if="result" :key="resultHash">
-      <h2>Info</h2>
+    <div v-if="result" :key="resultHash" class="wrapper">
+      <h2 class="h2">Info</h2>
       <p>{{ result.solutions.length > 0 ? '✅' : '❌' }} <strong>{{ result.solutions.length > 0 ? `${result.solutions.length} solution${result.solutions.length > 1 ? 's' : ''} found` : 'no solution found' }}</strong></p>
       <p>ℹ️ <strong>{{ result.meta.returningMaxOneSolution ? 'Maximum of one solution returned for better performance' : 'Looked for all possible solutions' }}</strong></p>
       <p>⏱️ <strong>{{ formatDuration(result.meta.calculationDuration) }}</strong> to calculate the situation</p>
@@ -29,7 +73,7 @@
       <p><strong>{{ numberFormatter.format(result.meta.skippedDuplicateSituations) }}</strong> combinations skipped due to duplicate situations</p>
       <p><strong>{{ numberFormatter.format(result.meta.skippedImpossibleSituations) }}</strong> combinations skipped due to impossible situations</p>
 
-      <h2>Game board</h2>
+      <h2 class="h2">Game board</h2>
       <div class="f">
         <Grid :grid="result.gameBoard" />
         ➡️
@@ -38,7 +82,7 @@
 
       <details>
         <summary>
-          <h2>
+          <h2 class="h2">
             Puzzle pieces ({{ Object.keys(result.puzzlePieces).length }})
           </h2>
         </summary>
@@ -56,7 +100,7 @@
 
       <details @toggle="showPossibleSolutionStarts = $event.newState === 'open'">
         <summary>
-          <h2>
+          <h2 class="h2">
             Phase 1: possible solution starts based on correct corner outputs ({{ numberFormatter.format(result.possibleSolutionStarts.length) }})
           </h2>
         </summary>
@@ -79,7 +123,7 @@
 
       <details open>
         <summary>
-          <h2>Phase 2: solutions ({{ numberFormatter.format(result.solutions.length) }}{{ result.meta.returningMaxOneSolution ? ' — maximized at one' : '' }})</h2>
+          <h2 class="h2">Phase 2: solutions ({{ numberFormatter.format(result.solutions.length) }}{{ result.meta.returningMaxOneSolution ? ' — maximized at one' : '' }})</h2>
         </summary>
         <p v-if="!result.solutions.length">No solutions possible.</p>
         <template v-else>
@@ -92,6 +136,12 @@
           />
         </template>
       </details>
+
+      <Button
+        size="lg"
+        @click="print"
+        class="my-8 w-full"
+      >Print results</Button>
     </div>
     <div v-else-if="error">
       <h2>Error</h2>
@@ -103,6 +153,7 @@
 <script setup lang="ts">
 import { useWebSocket } from '@vueuse/core';
 import type { Puzzle } from '#build/types/nitro-imports';
+import type { PuzzleOptions } from '~~/server/utils/PuzzleLibrary';
 
 const result = ref<Puzzle>();
 const resultHash = ref<string>();
@@ -114,20 +165,26 @@ const showPossibleSolutionStarts = ref(false);
 const puzzleOptions = ref<PuzzleOptions>();
 const puzzleOptionsStringified = usePuzzleOptionsStringified(puzzleOptions);
 
-// NOTE: Websockets are not working in Bun somehow. Status keeps being 'CONNECTING'.
+const useWebSocketToCalculate = ref<boolean>(!import.meta.dev);
+
 const {
-  status,
   data,
+  status,
+  open,
+  close,
   send,
-} = useWebSocket(`ws://${location.host}/api/ws`);
+} = useWebSocket(`ws://${location.host}/api/ws`, {
+  immediate: true,
+});
 
 watch(status, (newVal) => {
   console.log('WebSocket status:', newVal); // Log WebSocket state
 }, { immediate: true });
 
-// watch(data, (newVal) => {
-//   console.log(newVal);
-// });
+watch(data, (newVal) => {
+  result.value = JSON.parse(newVal);
+  pending.value = false;
+});
 
 function onPaste (event: ClipboardEvent) {
   const html = event.clipboardData?.getData('text/plain');
@@ -137,14 +194,22 @@ function onPaste (event: ClipboardEvent) {
   }
 
   puzzleOptions.value = parseNeopetsHtml(html);
-  calculate();
+  calculate(puzzleOptions.value);
 }
 
 let controller: AbortController;
 
-async function calculate () {
+async function calculate (payload?: PuzzleOptions) {
   error.value = undefined;
   pending.value = true;
+
+  if (useWebSocketToCalculate.value) {
+    const success = send(payload ? JSON.stringify(payload) : '');
+    if (!success) {
+      throw new Error('Failed to send data to WebSocket');
+    }
+    return;
+  }
 
   // NOTE: Unfortunately, canceling a request does not stop the calculation in the backend yet.
   // This may be solved by using web sockets, but those aren't working in Bun yet. What a great day.
@@ -153,19 +218,13 @@ async function calculate () {
     pending.value = false;
   });
 
-  // const success = send(JSON.stringify(puzzleOptions.value));
-
-  // if (!success) {
-  //   throw new Error('Failed to send data to WebSocket');
-  // }
-
   const response = await $fetch<Puzzle>('/api/calculate-solutions', {
     method: 'POST',
     timeout: 0,
     retry: 0,
     retryDelay: 0,
     signal: controller.signal,
-    ...(puzzleOptions.value ? { body: puzzleOptions.value } : {}),
+    ...(payload ? { body: payload } : {}),
   }).catch((e) => {
     error.value = JSON.stringify(e.data.data, null, 2);
     result.value = undefined;
@@ -189,6 +248,12 @@ async function calculate () {
 }
 
 function cancel() {
+  if (useWebSocketToCalculate.value) {
+    close();
+    open();
+    return;
+  }
+
   controller?.abort('User canceled');
 }
 
@@ -197,33 +262,40 @@ function print() {
 }
 </script>
 
-<style>
-html {
-  font-size: 14px;
-  font-family: system-ui;
+<style lang="scss">
+@import '@/assets/css/tailwind.css';
+
+// html {
+//   font-size: 14px;
+//   font-family: system-ui;
+// }
+
+// details summary :is(h2, h3) {
+//   display: inline-block;
+// }
+
+// ul {
+//   list-style-position: inside;
+//   padding-left: 0;
+// }
+
+.h1 {
+  @apply wrapper text-3xl font-bold leading-10;
 }
 
-details summary :is(h2, h3) {
-  display: inline-block;
+.h2 {
+  @apply text-xl font-bold leading-8;
 }
 
-ul {
-  list-style-position: inside;
-  padding-left: 0;
+.wrapper {
+  @apply mx-auto w-[calc(100%-4rem)] max-w-screen-xl;
 }
 
 .g {
-  display: grid;
-  /* grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); */
-  grid-auto-flow: column;
-  grid-auto-columns: max-content;
-  column-gap: 1.8rem;
-  row-gap: 1rem;
+  @apply grid grid-flow-col auto-cols-max gap-x-8 gap-y-4;
 }
 
 .f {
-  display: flex;
-  align-items: center;
-  column-gap: 0.6rem;
+  @apply flex items-center gap-x-3;
 }
 </style>
