@@ -15,7 +15,7 @@
             v-if="!pending"
             @click="calculate(puzzleOptions)"
             class="w-full"
-            :disabled="!puzzleOptions || (useWebSocketToCalculate && status === 'CONNECTING')"
+            :disabled="!puzzleOptions"
           >Calculate</Button>
           <Button
             v-else
@@ -33,7 +33,6 @@
             variant="secondary"
             @click="calculate()"
             class="w-full"
-            :disabled="useWebSocketToCalculate && status === 'CONNECTING'"
           >Calculate fallback</Button>
           <Button
             v-else
@@ -151,7 +150,6 @@
 </template>
 
 <script setup lang="ts">
-import { useWebSocket } from '@vueuse/core';
 import type { Puzzle } from '#build/types/nitro-imports';
 import type { PuzzleOptions } from '~~/server/utils/PuzzleLibrary';
 
@@ -164,27 +162,6 @@ const showPossibleSolutionStarts = ref(false);
 
 const puzzleOptions = ref<PuzzleOptions>();
 const puzzleOptionsStringified = usePuzzleOptionsStringified(puzzleOptions);
-
-const useWebSocketToCalculate = ref<boolean>(!import.meta.dev);
-
-const {
-  data,
-  status,
-  open,
-  close,
-  send,
-} = useWebSocket(`ws://${location.host}/api/ws`, {
-  immediate: true,
-});
-
-watch(status, (newVal) => {
-  console.log('WebSocket status:', newVal); // Log WebSocket state
-}, { immediate: true });
-
-watch(data, (newVal) => {
-  result.value = JSON.parse(newVal);
-  pending.value = false;
-});
 
 function onPaste (event: ClipboardEvent) {
   const html = event.clipboardData?.getData('text/plain');
@@ -203,57 +180,36 @@ async function calculate (payload?: PuzzleOptions) {
   error.value = undefined;
   pending.value = true;
 
-  if (useWebSocketToCalculate.value) {
-    const success = send(payload ? JSON.stringify(payload) : '');
-    if (!success) {
-      throw new Error('Failed to send data to WebSocket');
-    }
-    return;
-  }
-
-  // NOTE: Unfortunately, canceling a request does not stop the calculation in the backend yet.
-  // This may be solved by using web sockets, but those aren't working in Bun yet. What a great day.
+  // NOTE: Unfortunately, canceling a request does not stop the calculation in the backend.
+  // You can't solve it at all, even with WebSockets/SSE. What a great day.
   controller = new AbortController();
   controller.signal.addEventListener('abort', () => {
     pending.value = false;
   });
 
-  const response = await $fetch<Puzzle>('/api/calculate-solutions', {
-    method: 'POST',
-    timeout: 0,
-    retry: 0,
-    retryDelay: 0,
-    signal: controller.signal,
-    ...(payload ? { body: payload } : {}),
-  }).catch((e) => {
-    error.value = JSON.stringify(e.data.data, null, 2);
+  try {
+    const response = await $fetch<Puzzle>('/api/calculate-solutions', {
+      method: 'POST',
+      timeout: 0,
+      retry: 0,
+      retryDelay: 0,
+      signal: controller.signal,
+      ...(payload ? { body: payload } : {}),
+    });
+
+    resultHash.value = await hashObject(response);
+    result.value = response;
+    pending.value = false;
+  }
+  catch (err) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    error.value = JSON.stringify((err as any).data.data, null, 2);
     result.value = undefined;
-    throw e;
-  });
-
-  resultHash.value = await hashObject(response);
-  result.value = response;
-
-  // for await (const chunk of streamingFetch(() => fetch('/api/calculate-solutions', {
-  //   signal: controller.signal,
-  // }))) {
-  //   const lastPart = chunk.split('___PUZZLE___').at(-1);
-
-  //   if (lastPart) {
-  //     result.value = JSON.parse(lastPart);
-  //   }
-  // }
-
-  pending.value = false;
+    throw err;
+  }
 }
 
 function cancel() {
-  if (useWebSocketToCalculate.value) {
-    close();
-    open();
-    return;
-  }
-
   controller?.abort('User canceled');
 }
 

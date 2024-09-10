@@ -115,18 +115,14 @@ export class Puzzle {
 
   #loggingDisabled = false;
 
-  #abortController: AbortController;
-
   constructor (options: {
     figures: Array<string | number>;
     gameBoard: GridLike<number>;
     puzzlePieces: GridLike<number>[];
-  }, abortController: AbortController) {
+  }) {
     console.log('\nYum, a puzzle to chew on!');
 
     this.#validate(options);
-
-    this.#abortController = abortController;
 
     this.figures = options.figures.map((name, index) => new Figure(name, index));
 
@@ -508,7 +504,7 @@ export class Puzzle {
       const currentPuzzlePiecePlacementOptions = unusedPuzzlePiecesPlacementOptions.shift()!;
 
 
-      for await (const possibleSolution of this.#puzzlePiecePlacementOptionsIterator({
+      for (const possibleSolution of this.#puzzlePiecePlacementOptionsIterator({
         gameBoard,
         baseSolution: possibleSolutionStart,
         current: currentPuzzlePiecePlacementOptions,
@@ -574,7 +570,7 @@ export class Puzzle {
     console.log('Time to brute force the puzzle:', this.#milliSecondsToString(this.#timings.tBruteForceEnd! - this.#timings.tBruteForceStart!));
   }
 
-  async *#puzzlePiecePlacementOptionsIterator({
+  *#puzzlePiecePlacementOptionsIterator({
     gameBoard,
     baseSolution,
     current,
@@ -584,12 +580,11 @@ export class Puzzle {
     baseSolution: PossibleSolution;
     current: PuzzlePiecePlacementOptions;
     next: PuzzlePiecePlacementOptions[];
-  }): AsyncGenerator<PossibleSolution> {
+  }): Generator<PossibleSolution> {
     const { puzzlePiece, possiblePositions } = current;
     const possiblePositionCount = possiblePositions.length;
 
     for (let i = 0; i < possiblePositionCount; i++) {
-      if (await this.#checkRequestIsCanceled()) return;
       this.meta.totalNumberOfIteratorPlacementAttempts++;
 
       // const p0 = performance.now();
@@ -672,14 +667,12 @@ export class Puzzle {
 
         // Let another iterator yield for us. This "iterator recursion"
         // will be repeated until we reach the final level.
-        for await (const nestedResult of this.#puzzlePiecePlacementOptionsIterator({
+        yield* this.#puzzlePiecePlacementOptionsIterator({
           gameBoard: after,
           baseSolution: result,
           current: newCurrent!,
           next: newNext,
-        })) {
-          yield nestedResult;
-        }
+        });
 
         // Prevent yielding the result of the current level, while we
         // still have deeper levels to go through.
@@ -865,19 +858,6 @@ export class Puzzle {
     }
   }
 
-  async #checkRequestIsCanceled () {
-    await this.#nextTick();
-
-    const { signal } = this.#abortController;
-
-    if (signal.aborted) {
-      console.log('Request was aborted with reason:', signal.reason);
-      return true;
-    }
-
-    return false;
-  }
-
   #logSkippedSituations (final = false) {
     const {
       skippedDuplicateSituations: totalSkippedDuplicateSituations,
@@ -974,14 +954,6 @@ export class Puzzle {
     else {
       return `${numberFormatter.format(ms / 3_600_000)} hours`;
     }
-  }
-
-  /**
-   * This may be used to let the AbortController abort the request
-   * during intensive sync logic.
-   */
-  async #nextTick () {
-    // await new Promise((resolve) => setImmediate(resolve));
   }
 
   // /**
