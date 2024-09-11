@@ -9,27 +9,19 @@ export function parseNeopetsHtml (html: string): PuzzleOptions {
   }
 
   const figures = Array.from(figuresTable.querySelectorAll('img'))
-    .map(img => img.src.split('/').at(-1)!.split('.gif').at(0)!)
-    .filter(name => name !== 'arrow');
+    .map(img => img.src)
+    .filter(src => src.split('/').at(-1)!.split('.gif').at(0)! !== 'arrow');
 
-  // Remove last
+  // Remove last, as it's always the same as the first
   figures.pop();
-
-  // const targetFigure = figures.at(-1);
-
-  // console.log('Figures:', figures);
-  // console.log('Target figure:', targetFigure);
 
   const gameBoard = Array.from(parsed.querySelector('#content .content table:not([border="1"])')!.querySelectorAll('tr')!)
     .map(tr => Array.from(tr.querySelectorAll('td')!)
       .map(td => {
         // eslint-disable-next-line @typescript-eslint/no-non-null-asserted-optional-chain
-        const figure = td.querySelector('img')?.src.split('/').at(-1)!.split('.gif').at(0)!;
-        return figures.indexOf(figure);
+        return figures.indexOf(td.querySelector('img')?.src!);
       })
     );
-
-  // console.log('Game board:', gameBoard);
 
   const puzzlePieces = Array.from(parsed.querySelectorAll('table[cellpadding="15"] > tbody > tr > td'))
     .map(td => {
@@ -42,8 +34,6 @@ export function parseNeopetsHtml (html: string): PuzzleOptions {
           .map(td => td.hasAttribute('height') ? 0 : 1)
         );
     });
-
-  // console.log('Puzzle pieces:', puzzlePieces);
 
   return {
     figures,

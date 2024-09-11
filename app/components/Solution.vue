@@ -6,7 +6,7 @@
 
     <h4>Puzzle pieces (before — placement — after):</h4>
     <p v-if="!solution.parts.length">None.</p>
-    <template v-else>
+    <div v-else class="overflow-x-auto">
       <div class="grid grid-cols-[auto_1fr] items-center gap-2 my-4">
         <Switch v-model:checked="showSorted" :id="sortCheckboxId"/>
         <Label :for="sortCheckboxId" class="leading-5">Sort by puzzle piece order<br><span class="text-gray-400">Before and after situations will be greyed out if turned on, because the stacking of puzzle pieces is not recalculated upon changing sort order.</span></Label>
@@ -36,7 +36,7 @@
           <span v-if="index === parts.length - 1" style="font-size: 1.5rem; margin-left: 0.5rem">✅</span>
         </div>
       </template>
-    </template>
+    </div>
   </Details>
 </template>
 

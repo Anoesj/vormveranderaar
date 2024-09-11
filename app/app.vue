@@ -82,7 +82,7 @@
           <br>
           <p><strong>{{ numberFormatter.format(result.meta.totalNumberOfPossibleCombinations) }}</strong> possible puzzle piece combinations in total</p>
           <p><strong>{{ numberFormatter.format(result.meta.totalNumberOfIteratorPlacementAttempts) }}</strong> puzzle piece placement attempts</p>
-          <p><strong>{{ numberFormatter.format(result.meta.totalNumberOfTriedCombinations) }}</strong> puzzle piece combinations tested for validity</p>
+          <p><strong>{{ numberFormatter.format(result.meta.totalNumberOfTriedCombinations) }}</strong> puzzle piece combinations validated</p>
           <p><strong>{{ numberFormatter.format(result.meta.skippedDuplicateSituations) }}</strong> combinations skipped due to duplicate situations</p>
           <p><strong>{{ numberFormatter.format(result.meta.skippedImpossibleSituations) }}</strong> combinations skipped due to impossible situations</p>
         </div>
@@ -213,8 +213,9 @@ async function calculate (payload?: PuzzleOptions) {
     pending.value = false;
   });
 
+  let response: Puzzle | undefined;
   try {
-    const response = await $fetch<Puzzle>('/api/calculate-solutions', {
+    response = await $fetch<Puzzle>('/api/calculate-solutions', {
       method: 'POST',
       timeout: 0,
       retry: 0,
@@ -222,10 +223,6 @@ async function calculate (payload?: PuzzleOptions) {
       signal: controller.signal,
       ...(payload ? { body: payload } : {}),
     });
-
-    resultHash.value = await hashObject(response);
-    result.value = response;
-    pending.value = false;
   }
   catch (err) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -233,6 +230,10 @@ async function calculate (payload?: PuzzleOptions) {
     result.value = undefined;
     throw err;
   }
+
+  resultHash.value = await hashObject(response);
+  result.value = response;
+  pending.value = false;
 }
 
 function cancel() {
