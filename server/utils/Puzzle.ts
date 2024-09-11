@@ -57,6 +57,11 @@ export class Puzzle {
   // #lastSkippedDuplicateSituations = 0;
   #hasPreparedSolutionStarts = false;
 
+  /**
+   * The number of cells that can be influenced from every number of puzzle pieces left.
+   */
+  #maxCellsInfluencedPerPuzzlePiecesLeft: Map<number, number> = new Map;
+
   meta: {
     totalNumberOfPossibleCombinations: number;
     totalNumberOfTriedCombinations: number;
@@ -501,8 +506,15 @@ export class Puzzle {
         continue;
       }
 
-      const currentPuzzlePiecePlacementOptions = unusedPuzzlePiecesPlacementOptions.shift()!;
+      let maxCellsInfluencedSoFar = 0;
+      for (const [index, puzzlePiecePlacementOptions] of unusedPuzzlePiecesPlacementOptions.toReversed().entries()) {
+        this.#maxCellsInfluencedPerPuzzlePiecesLeft.set(index, maxCellsInfluencedSoFar);
+        maxCellsInfluencedSoFar += puzzlePiecePlacementOptions.puzzlePiece.cellsInfluenced;
+      }
 
+      this.#maxCellsInfluencedPerPuzzlePiecesLeft.set(unusedPuzzlePiecesPlacementOptions.length, maxCellsInfluencedSoFar);
+
+      const currentPuzzlePiecePlacementOptions = unusedPuzzlePiecesPlacementOptions.shift()!;
 
       for (const possibleSolution of this.#puzzlePiecePlacementOptionsIterator({
         gameBoard,
@@ -534,40 +546,6 @@ export class Puzzle {
     }
 
     this.#finalize();
-  }
-
-  #finalize () {
-    this.#timings.tBruteForceEnd = performance.now();
-
-    this.#saveCalculationDuration();
-    console.log('\n-----------------------------------');
-    console.log('Total number of tried combinations:', numberFormatter.format(this.meta.totalNumberOfTriedCombinations));
-    console.log('Total number of iterator placement attempts:', numberFormatter.format(this.meta.totalNumberOfIteratorPlacementAttempts));
-    this.#logSkippedSituations(true);
-    this.#logTimeToPrepareSolutionStarts();
-    this.#logTimeToBruteForce();
-    console.log('Total time to calculate solution:', this.#milliSecondsToString(this.meta.calculationDuration));
-    console.log('Max memory used:', this.#memoryToString(this.meta.maxMemoryUsed));
-
-    const perfStats = this.#perf;
-
-    for (const [k, v] of Object.entries(perfStats)) {
-      if (!v.length) continue;
-
-      const total = MathHelper.sum(v);
-      console.log(`\nAverage time spent in ${k}: ${total / v.length} ms`);
-      console.log(`Total time spent in ${k}: ${total} ms`);
-    }
-  }
-
-  #logTimeToPrepareSolutionStarts () {
-    console.log('Time to prepare possible solution starts:', this.#hasPreparedSolutionStarts
-      ? this.#milliSecondsToString(this.#timings.tPrepareSolutionStartsEnd! - this.#timings.tPrepareSolutionStartsStart!)
-      : 'n/a');
-  }
-
-  #logTimeToBruteForce () {
-    console.log('Time to brute force the puzzle:', this.#milliSecondsToString(this.#timings.tBruteForceEnd! - this.#timings.tBruteForceStart!));
   }
 
   *#puzzlePiecePlacementOptionsIterator({
@@ -611,17 +589,15 @@ export class Puzzle {
       //   continue;
       // }
 
-      const nextLength = next.length;
+      const puzzlePiecesLeft = next.length;
 
       // const p5 = performance.now();
       const afterCorrectCellsCount = after.countValue(this.targetFigure.value);
       const afterIncorrectCellsCount = after.cells - afterCorrectCellsCount;
 
       // const p6 = performance.now();
-      let nextPuzzlePiecesMaxInfluencedCells = 0;
-      for (let i = 0; i < nextLength; i++) {
-        nextPuzzlePiecesMaxInfluencedCells += next[i]!.puzzlePiece.cellsInfluenced;
-      }
+
+      const nextPuzzlePiecesMaxInfluencedCells = this.#maxCellsInfluencedPerPuzzlePiecesLeft.get(puzzlePiecesLeft)!;
 
       // const p7 = performance.now();
       const canBeSolvedFromHere = afterIncorrectCellsCount <= nextPuzzlePiecesMaxInfluencedCells;
@@ -630,12 +606,10 @@ export class Puzzle {
       // this.#perf.getNextPuzzlePiecesMaxInfluencedCells.push(p7 - p6);
 
       if (!canBeSolvedFromHere) {
-        // const skipped = next.reduce((acc, p) => acc * p.puzzlePiece.getPossiblePositions(this.#hasPreparedSolutionStarts).length, 1);
-
         // If at the final level, we skip 1 impossible situation.
         // If at any level before that, we skip all impossible situations.
         let skipped = 1;
-        for (let i = 0; i < nextLength; i++) {
+        for (let i = 0; i < puzzlePiecesLeft; i++) {
           skipped *= next[i]!.puzzlePiece.getPossiblePositions(this.#hasPreparedSolutionStarts).length;
         }
 
@@ -661,7 +635,7 @@ export class Puzzle {
       // If there are more levels, proceed to the next level, yield that
       // level's result and continue with the next possible position of
       // the current puzzle piece.
-      if (nextLength) {
+      if (puzzlePiecesLeft) {
         const newCurrent = next[0];
         const newNext = next.slice(1);
 
@@ -704,6 +678,40 @@ export class Puzzle {
 
     this.#uniqueSituations.add(key);
     return false;
+  }
+
+  #finalize () {
+    this.#timings.tBruteForceEnd = performance.now();
+
+    this.#saveCalculationDuration();
+    console.log('\n-----------------------------------');
+    console.log('Total number of tried combinations:', numberFormatter.format(this.meta.totalNumberOfTriedCombinations));
+    console.log('Total number of iterator placement attempts:', numberFormatter.format(this.meta.totalNumberOfIteratorPlacementAttempts));
+    this.#logSkippedSituations(true);
+    this.#logTimeToPrepareSolutionStarts();
+    this.#logTimeToBruteForce();
+    console.log('Total time to calculate solution:', this.#milliSecondsToString(this.meta.calculationDuration));
+    console.log('Max memory used:', this.#memoryToString(this.meta.maxMemoryUsed));
+
+    const perfStats = this.#perf;
+
+    for (const [k, v] of Object.entries(perfStats)) {
+      if (!v.length) continue;
+
+      const total = MathHelper.sum(v);
+      console.log(`\nAverage time spent in ${k}: ${total / v.length} ms`);
+      console.log(`Total time spent in ${k}: ${total} ms`);
+    }
+  }
+
+  #logTimeToPrepareSolutionStarts () {
+    console.log('Time to prepare possible solution starts:', this.#hasPreparedSolutionStarts
+      ? this.#milliSecondsToString(this.#timings.tPrepareSolutionStartsEnd! - this.#timings.tPrepareSolutionStartsStart!)
+      : 'n/a');
+  }
+
+  #logTimeToBruteForce () {
+    console.log('Time to brute force the puzzle:', this.#milliSecondsToString(this.#timings.tBruteForceEnd! - this.#timings.tBruteForceStart!));
   }
 
   #createCornerInfo (corner: number) {
