@@ -12,13 +12,23 @@
       <td
         v-for="(colVal, colIndex) of row"
         :key="colIndex"
-        :class="[{
-          'puzzle-piece-active-cell': isPuzzlePieceGrid && colVal,
-          [`figure--${colVal}`]: !isPuzzlePieceGrid,
-        }, 'border border-foreground leading-none relative text-center']"
+        :class="[
+          {
+            'puzzle-piece-active-cell': isPuzzlePieceGrid && colVal,
+            [`figure--${colVal}`]: !isPuzzlePieceGrid && !doShowFigures,
+          },
+          `${!doShowFigures ? 'border-foreground border-[0.5px]' : ''} leading-none relative text-center`,
+        ]"
       >
         <div class="w-9 h-9 flex items-center justify-center">
-          <slot :value="colVal">{{ colVal }}</slot>
+          <slot :value="colVal">
+            <img
+              v-if="!isPuzzlePieceGrid && doShowFigures"
+              :src="imgSrc(colVal as number)"
+              class="w-full h-full"
+            >
+            <template v-else>{{ colVal }}</template>
+          </slot>
         </div>
       </td>
     </tr>
@@ -38,6 +48,18 @@ const {
   replaceAllWith?: unknown;
 }>();
 
+const showFigures = inject(showFiguresKey)!;
+const result = inject(resultKey)!;
+
+const figuresNamesAreUrls = computed(() => result.value!.figures
+  .every(figure => typeof figure.name === 'string' && figure.name.startsWith('http')));
+
+const doShowFigures = computed(() => showFigures.value && figuresNamesAreUrls.value);
+
+function imgSrc (value: number) {
+  return result.value!.figures[value]!.name as string;
+}
+
 const gridData = computed(() => {
   if (replaceAllWith === undefined) {
     return grid.data;
@@ -52,7 +74,7 @@ const gridData = computed(() => {
 table {
   &.grid--puzzle-piece td {
     &.puzzle-piece-active-cell {
-      background-color: rgb(62, 62, 62);
+      background-color: #c41a1e;
       color: white;
     }
   }

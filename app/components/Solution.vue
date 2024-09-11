@@ -19,7 +19,7 @@
         v-for="(part, index) of parts"
         :key="part.id"
       >
-        <h5>
+        <h5 class="mt-4">
           {{ part.id }}{{
             part.partOfPossibleSolutionStart !== undefined
               ? ` (part of possible solution start #${part.partOfPossibleSolutionStart + 1})`

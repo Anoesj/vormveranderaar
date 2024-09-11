@@ -55,6 +55,13 @@
       </Card>
     </div>
 
+    <div class="wrapper">
+      <div class="grid grid-cols-[auto_1fr] items-center gap-2 my-4">
+        <Switch id="show-figures" v-model:checked="showFigures"/>
+        <Label for="show-figures" class="leading-5">Show original figures on game boards<br><span class="text-gray-400">If turned off, a numeric representation will be shown.</span></Label>
+      </div>
+    </div>
+
     <h1 v-if="pending || result">
       <template v-if="pending">
         Loading results<div class="loader"></div>
@@ -177,6 +184,7 @@
 
 <script setup lang="ts">
 import type { Puzzle } from '#build/types/nitro-imports';
+import { useLocalStorage } from '@vueuse/core';
 import type { PuzzleOptions } from '~~/server/utils/PuzzleLibrary';
 
 const result = ref<Puzzle>();
@@ -184,10 +192,14 @@ const resultHash = ref<string>();
 const pending = ref<false | 'input' | 'fallback'>(false);
 const error = ref<string>();
 
+const showFigures = useLocalStorage('showFigures', true);
 const showPossibleSolutionStarts = ref(false);
 
 const puzzleOptions = ref<PuzzleOptions>();
 const puzzleOptionsStringified = usePuzzleOptionsStringified(puzzleOptions);
+
+provide(showFiguresKey, showFigures);
+provide(resultKey, result);
 
 function onPaste (event: ClipboardEvent) {
   const html = event.clipboardData?.getData('text/plain');

@@ -477,9 +477,6 @@ export class Puzzle {
           this.meta.totalNumberOfTriedCombinations++;
           this.solutions.push(possibleSolutionStart);
 
-          // this.#logSkippedSituations();
-          // yield true;
-
           if (this.meta.returningMaxOneSolution) {
             console.log('Returning max one solution, stopping the brute force');
             return;
@@ -489,8 +486,6 @@ export class Puzzle {
         }
 
         this.#maybeLog(() => console.log('No solutions found for this possible solution start'));
-        // this.#logSkippedSituations();
-        // yield false;
         continue;
       }
 
@@ -501,8 +496,6 @@ export class Puzzle {
       if (shouldAbort) {
         this.#maybeLog(() => console.log(`Had the same grid with the same unused puzzle pieces before, skipping this entire possible solution start.`));
         this.meta.skippedDuplicateSituations += unusedPuzzlePiecesPossibleCombinations;
-        // this.#logSkippedSituations();
-        // yield false;
         continue;
       }
 
@@ -522,15 +515,12 @@ export class Puzzle {
         current: currentPuzzlePiecePlacementOptions,
         next: unusedPuzzlePiecesPlacementOptions,
       })) {
-        // await this.#nextEventLoopTick();
-
         this.meta.totalNumberOfTriedCombinations++;
 
         if (possibleSolution.isSolution()) {
           console.log('Found solution!');
           console.log(possibleSolution.toString());
           this.solutions.push(possibleSolution);
-          // yield true;
 
           if (this.meta.returningMaxOneSolution) {
             console.log('Returning max one solution, stopping.');
@@ -541,8 +531,6 @@ export class Puzzle {
           continue;
         }
       }
-
-      // this.#logSkippedSituations();
     }
 
     this.#finalize();
