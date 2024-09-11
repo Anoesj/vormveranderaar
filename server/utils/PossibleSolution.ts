@@ -83,6 +83,10 @@ export class PossibleSolution {
     this.parts.sort((a, b) => a.id.localeCompare(b.id, 'nl-NL'));
   }
 
+  toSortedAlphabetically () {
+    return this.parts.toSorted((a, b) => a.id.localeCompare(b.id, 'nl-NL'));
+  }
+
   getContinuationInfo (puzzlePieces: PuzzlePiece[], avoidCorners: boolean) {
     const unusedPuzzlePieces = puzzlePieces.filter((puzzlePiece) => !this.parts.find((part) => puzzlePiece.id === part.id));
 
@@ -112,11 +116,17 @@ export class PossibleSolution {
     return this.finalGameBoard!.checkIsSolution(this.targetValue);
   }
 
-  toString () {
+  logSolution () {
     if (!this.parts.length) {
       return 'No puzzle pieces used.';
     }
 
-    return this.parts.map(({ id, position }) => `${id} at ${position}`).join('\n');
+    console.log(
+      'Found solution!\n'
+      + 'Sorted by brute force stacking order:\n'
+      + this.parts.map(({ id, position }) => `${id} at ${position}`).join('\n')
+      + '\nSorted by original order:\n'
+      + this.toSortedAlphabetically().map(({ id, position }) => `${id} at ${position}`).join('\n')
+    );
   }
 }

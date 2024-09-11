@@ -472,8 +472,7 @@ export class Puzzle {
         this.#maybeLog(() => console.log('No unused puzzle pieces, checking if we reached a solution already'));
 
         if (gameBoardSoFar.isSolution) {
-          console.log('Found solution!');
-          console.log(possibleSolutionStart.toString());
+          possibleSolutionStart.logSolution();
           this.meta.totalNumberOfTriedCombinations++;
           this.solutions.push(possibleSolutionStart);
 
@@ -518,8 +517,7 @@ export class Puzzle {
         this.meta.totalNumberOfTriedCombinations++;
 
         if (possibleSolution.isSolution()) {
-          console.log('Found solution!');
-          console.log(possibleSolution.toString());
+          possibleSolution.logSolution();
           this.solutions.push(possibleSolution);
 
           if (this.meta.returningMaxOneSolution) {
