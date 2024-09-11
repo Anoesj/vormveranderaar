@@ -17,7 +17,7 @@
           [`figure--${colVal}`]: !isPuzzlePieceGrid,
         }, 'border border-foreground leading-none relative text-center']"
       >
-        <div class="w-10 h-10 p-3 flex items-center justify-center">
+        <div class="w-9 h-9 flex items-center justify-center">
           <slot :value="colVal">{{ colVal }}</slot>
         </div>
       </td>

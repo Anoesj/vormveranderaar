@@ -1,6 +1,6 @@
 <template>
   <details
-    class="lazy-details"
+    class="lazy-details bg-[#ffffff] overflow-hidden"
     :open="isOpen"
     @toggle="handleToggle"
   >
@@ -9,7 +9,7 @@
         Details
       </slot>
       <span class="lazy-details__icon" aria-hidden="true">
-        {{ isOpen ? '▼' : '▶' }}
+        {{ isOpen ? '-' : '+' }}
       </span>
     </summary>
     <div v-if="isOpen" class="lazy-details__content">
@@ -62,7 +62,7 @@ watch(() => open, (newValue) => {
   display: none;
 }
 
-.lazy-details__icon {
+/* .lazy-details__icon {
   font-size: 0.75rem;
   transition: transform 0.2s ease;
   margin-left: 0.5rem;
@@ -71,7 +71,7 @@ watch(() => open, (newValue) => {
 
 .lazy-details[open] .lazy-details__icon {
   transform: rotate(180deg);
-}
+} */
 
 .lazy-details__content {
   padding: 1rem;

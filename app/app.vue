@@ -1,7 +1,7 @@
 <template>
   <div class="flex flex-col gap-6 py-8">
     <div class="wrapper flex gap-4">
-      <Card class="flex-1">
+      <Card class="flex-1 bg-[#f8fafc]">
         <CardHeader>
           <CardTitle>Input</CardTitle>
         </CardHeader>
@@ -25,7 +25,7 @@
           >Cancel</Button>
         </CardFooter>
         <CardContent class="mt-[-1rem] pb-1">
-          <Separator class="my-4" label="Or" />
+          <Separator class="my-4" label="Or" labelClass="bg-[#f8fafc]" />
         </CardContent>
         <CardFooter>
           <Button
@@ -43,7 +43,7 @@
         </CardFooter>
       </Card>
 
-      <Card class="flex-1">
+      <Card class="flex-1 bg-[#f8fafc]">
         <CardHeader>
           <CardTitle>Output</CardTitle>
         </CardHeader>
@@ -56,27 +56,53 @@
     </div>
 
     <h1 v-if="pending || result">
-      {{ pending ? 'Loading results...' : 'Results' }}
+      <template v-if="pending">
+        Loading results<div class="loader"></div>
+      </template>
+      <template v-else>
+        Results
+      </template>
     </h1>
 
-    <div v-if="result" :key="resultHash" class="wrapper">
-      <h2>Info</h2>
-      <p>{{ result.solutions.length > 0 ? '✅' : '❌' }} <strong>{{ result.solutions.length > 0 ? `${result.solutions.length} solution${result.solutions.length > 1 ? 's' : ''} found` : 'no solution found' }}</strong></p>
-      <p>ℹ️ <strong>{{ result.meta.returningMaxOneSolution ? 'Maximum of one solution returned for better performance' : 'Looked for all possible solutions' }}</strong></p>
-      <p>⏱️ <strong>{{ formatDuration(result.meta.calculationDuration) }}</strong> to calculate the situation</p>
-      <p>🧠 <strong>{{ formatMemory(result.meta.maxMemoryUsed) }}</strong> max memory used</p>
-      <br>
-      <p><strong>{{ numberFormatter.format(result.meta.totalNumberOfPossibleCombinations) }}</strong> possible puzzle piece combinations in total</p>
-      <p><strong>{{ numberFormatter.format(result.meta.totalNumberOfIteratorPlacementAttempts) }}</strong> puzzle piece placement attempts</p>
-      <p><strong>{{ numberFormatter.format(result.meta.totalNumberOfTriedCombinations) }}</strong> puzzle piece combinations tested for validity</p>
-      <p><strong>{{ numberFormatter.format(result.meta.skippedDuplicateSituations) }}</strong> combinations skipped due to duplicate situations</p>
-      <p><strong>{{ numberFormatter.format(result.meta.skippedImpossibleSituations) }}</strong> combinations skipped due to impossible situations</p>
-
-      <h2>Game board</h2>
-      <div class="f">
-        <Grid :grid="result.gameBoard" />
-        ➡️
-        <Grid :grid="result.gameBoard" :replaceAllWith="result.targetFigure.value" />
+    <div
+      v-if="result"
+      :key="resultHash"
+      class="wrapper"
+      :class="{
+        'opacity-50': pending,
+      }"
+    >
+      <div class="flex gap-8">
+        <div class="flex-1">
+          <h2>Info</h2>
+          <p>{{ result.solutions.length > 0 ? '✅' : '❌' }} <strong>{{ result.solutions.length > 0 ? `${result.solutions.length} solution${result.solutions.length > 1 ? 's' : ''} found` : 'no solution found' }}</strong></p>
+          <p>ℹ️ <strong>{{ result.meta.returningMaxOneSolution ? 'Maximum of one solution returned for better performance' : 'Looked for all possible solutions' }}</strong></p>
+          <p>⏱️ <strong>{{ formatDuration(result.meta.calculationDuration) }}</strong> to calculate the situation</p>
+          <p>🧠 <strong>{{ formatMemory(result.meta.maxMemoryUsed) }}</strong> max memory used</p>
+          <br>
+          <p><strong>{{ numberFormatter.format(result.meta.totalNumberOfPossibleCombinations) }}</strong> possible puzzle piece combinations in total</p>
+          <p><strong>{{ numberFormatter.format(result.meta.totalNumberOfIteratorPlacementAttempts) }}</strong> puzzle piece placement attempts</p>
+          <p><strong>{{ numberFormatter.format(result.meta.totalNumberOfTriedCombinations) }}</strong> puzzle piece combinations tested for validity</p>
+          <p><strong>{{ numberFormatter.format(result.meta.skippedDuplicateSituations) }}</strong> combinations skipped due to duplicate situations</p>
+          <p><strong>{{ numberFormatter.format(result.meta.skippedImpossibleSituations) }}</strong> combinations skipped due to impossible situations</p>
+        </div>
+        <div class="flex-1">
+          <h2>Game board</h2>
+          <div class="f mt-4">
+            <div>
+              <div>Current</div>
+              <Grid :grid="result.gameBoard" />
+            </div>
+            <div>
+              <div>&nbsp;</div>
+              ➡️
+            </div>
+            <div>
+              <div>Goal</div>
+              <Grid :grid="result.gameBoard" :replaceAllWith="result.targetFigure.value" />
+            </div>
+          </div>
+        </div>
       </div>
 
       <Details class="mt-8">
@@ -241,7 +267,22 @@ html {
   font-family: "Urbanist", sans-serif;
   font-optical-sizing: auto;
   font-size: 20px;
+  font-weight: 500;
   line-height: 1.8;
+
+  background-image:
+    radial-gradient(circle at center, #0000, Canvas),
+    radial-gradient(
+      circle at 1px 1px,
+      hsl(var(--primary)) 1px,
+      #0000 0
+    );
+  background-size: 200px 200px, 20px 20px;
+  background-repeat: repeat;
+}
+
+body {
+  background: none;
 }
 
 // details summary :is(h2, h3) {
@@ -277,6 +318,10 @@ h4 {
   @apply text-base font-bold leading-8;
 }
 
+h5 {
+  @apply text-base font-bold leading-8;
+}
+
 .wrapper {
   @apply mx-auto w-[calc(100%-4rem)] max-w-screen-xl;
 }
@@ -286,6 +331,27 @@ h4 {
 }
 
 .f {
-  @apply flex items-center gap-x-3;
+  @apply flex items-center gap-x-4;
+}
+
+.loader {
+  margin-left: 0.3ch;
+  display: inline-block;
+  width: 1.2ch;
+  aspect-ratio: 2;
+  --_g: no-repeat radial-gradient(circle closest-side,#000 90%,#0000);
+  background:
+    var(--_g) 0%   50%,
+    var(--_g) 50%  50%,
+    var(--_g) 100% 50%;
+  background-size: calc(100%/3) 50%;
+  animation: l3 1s infinite linear;
+}
+
+@keyframes l3 {
+  20%{background-position:0%   0%, 50%  50%,100%  50%}
+  40%{background-position:0% 100%, 50%   0%,100%  50%}
+  60%{background-position:0%  50%, 50% 100%,100%   0%}
+  80%{background-position:0%  50%, 50%  50%,100% 100%}
 }
 </style>
