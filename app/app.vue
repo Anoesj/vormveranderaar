@@ -162,7 +162,7 @@
         </div>
         <div class="grow shrink-0 basis-[400px] overflow-x-auto">
           <h2>Game board</h2>
-          <div class="f flex-wrap mt-4">
+          <div class="f flex-wrap gap-y-4 mt-4">
             <div>
               <div>Current</div>
               <Grid :grid="result.gameBoard" />
@@ -294,10 +294,11 @@ async function getClipboardContents (inputType: Exclude<InputType, 'example'>) {
 
     puzzleOptions.value = inputType === 'html'
       ? parseNeopetsHtml(text)
-      : Function('"use strict"; return (' + text + ')')() as PuzzleOptions;
+      : Function('"use strict"; return (' + (text.endsWith(',') ? text.slice(0, -1) : text) + ')')() as PuzzleOptions;
 
     calculate(inputType, puzzleOptions.value);
-  } catch (err) {
+  }
+  catch (err) {
     console.error('Failed to calculate from clipboard contents', err);
   }
 }
