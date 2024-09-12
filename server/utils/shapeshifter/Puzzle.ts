@@ -566,7 +566,7 @@ export class Puzzle {
           + `\nTotal possible combinations: ${numberFormatter.format(this.meta.totalNumberOfPossibleCombinations)}`
           + `\nPercentage of all possible combinations tried: ${numberFormatter.format(this.meta.skippedImpossibleSituations / this.meta.totalNumberOfPossibleCombinations * 100)}%`
           + `\nTime passed: ${this.#milliSecondsToString(timePassed)}`
-          + `\nThroughput: ${numberFormatter.format(this.meta.skippedImpossibleSituations / (timePassed / 1000))} situations per second`
+          + `\nThroughput: ${numberFormatter.format(Math.round(this.meta.skippedImpossibleSituations / (timePassed / 1000)))} situations per second`
         );
 
         console.log(msg);
