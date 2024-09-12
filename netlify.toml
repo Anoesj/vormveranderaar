@@ -1,6 +1,6 @@
 [build]
   base = "/"
-  command = "pnpm nuxt build"
+  command = "bun --bun nuxt build"
   publish = "dist"
 
 [build.environment]

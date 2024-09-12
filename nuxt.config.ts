@@ -1,3 +1,5 @@
+const netlify = process.env.NETLIFY === 'true';
+
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   compatibilityDate: '2024-08-30',
@@ -22,7 +24,7 @@ export default defineNuxtConfig({
     componentDir: './app/components/ui',
   },
   nitro: {
-    preset: 'bun',
+    preset: netlify ? 'netlify-static' : 'bun',
     experimental: {
       websocket: true,
     },
