@@ -21,7 +21,6 @@
 </template>
 
 <script setup lang="ts">
-import { useEventListener } from '@vueuse/core';
 import { Minus, Plus } from 'lucide-vue-next';
 
 const {
@@ -40,6 +39,8 @@ const emit = defineEmits<{
 
 const isOpen = ref(open);
 
+const isPrinting = inject(isPrintingKey)!;
+
 function handleToggle (event: ToggleEvent) {
   isOpen.value = event.newState === 'open';
   emit('toggle', isOpen.value);
@@ -49,21 +50,18 @@ watch(() => open, (newValue) => {
   isOpen.value = newValue;
 });
 
-onMounted(() => {
-  if (!forceOpenOnPrint) {
-    return;
-  }
-
+if (import.meta.client && forceOpenOnPrint) {
   let wasOpen: boolean | undefined;
 
-  useEventListener(window, 'custombeforeprint', () => {
-    wasOpen = isOpen.value;
-    isOpen.value = true;
-  });
-
-  useEventListener(window, 'customafterprint', () => {
-    isOpen.value = wasOpen as boolean;
-    wasOpen = undefined;
-  });
-});
+  watch(isPrinting, (newValue) => {
+    if (newValue) {
+      wasOpen = isOpen.value;
+      isOpen.value = true;
+    }
+    else {
+      isOpen.value = wasOpen as boolean;
+      wasOpen = undefined;
+    }
+  }, { flush: 'sync' });
+}
 </script>

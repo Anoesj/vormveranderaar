@@ -276,6 +276,8 @@ const resultHash = ref<string>();
 const pending = ref<false | InputType>(false);
 const error = ref<string>();
 
+const isPrinting = shallowRef(false);
+
 const showFigures = useLocalStorage('showFigures', true);
 const calculateInBrowser = useLocalStorage('calculateInBrowser', runtimeConfig.public.calculateInBrowserOnly);
 
@@ -284,6 +286,7 @@ const puzzleOptionsStringified = usePuzzleOptionsStringified(puzzleOptions);
 
 provide(showFiguresKey, showFigures);
 provide(resultKey, result);
+provide(isPrintingKey, isPrinting);
 
 async function getClipboardContents (inputType: Exclude<InputType, 'example'>) {
   try {
@@ -395,10 +398,10 @@ function cancel() {
 }
 
 async function print() {
-  window.dispatchEvent(new CustomEvent('custombeforeprint'));
+  isPrinting.value = true;
   await nextTick();
   window.print();
-  window.dispatchEvent(new CustomEvent('customafterprint'));
+  isPrinting.value = false;
 }
 
 // <link rel="preconnect" href="https://fonts.googleapis.com">

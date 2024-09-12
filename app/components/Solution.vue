@@ -28,12 +28,16 @@
         </h5>
 
         <div class="f">
-          <Grid :grid="part.before!" :class="{ 'opacity-30': showSorted }" />
-          ➕
+          <template v-if="!isPrinting">
+            <Grid :grid="part.before!" :class="{ 'opacity-30': showSorted }" />
+            ➕
+          </template>
           <Grid :grid="part.grid" isPuzzlePieceGrid />
-          🟰
-          <Grid :grid="part.after!" :class="{ 'opacity-30': showSorted }" />
-          <span v-if="index === parts.length - 1" style="font-size: 1.5rem; margin-left: 0.5rem">✅</span>
+          <template v-if="!isPrinting">
+            🟰
+            <Grid :grid="part.after!" :class="{ 'opacity-30': showSorted }" />
+            <span v-if="index === parts.length - 1" style="font-size: 1.5rem; margin-left: 0.5rem">✅</span>
+          </template>
         </div>
       </template>
     </div>
@@ -41,16 +45,16 @@
 </template>
 
 <script setup lang="ts">
-import type { PossibleSolution } from '#build/types/nitro-imports';
-
 const {
   nth,
   solution,
 } = defineProps<{
   nth: number;
   only: boolean;
-  solution: PossibleSolution;
+  solution: InstanceType<typeof PossibleSolution>;
 }>();
+
+const isPrinting = inject(isPrintingKey)!;
 
 const showSorted = ref(true);
 const autoScroll = useAutoScroll(40);
