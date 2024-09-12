@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "HOST=0.0.0.0 nuxt dev",
     "build": "./scripts/build.sh",
+    "build:netlify": "./scripts/build-netlify.sh",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "test": "vitest",

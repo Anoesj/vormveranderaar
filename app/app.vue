@@ -64,7 +64,7 @@
             rows="2"
             cols="40"
             readonly
-            placeholder="When pasting Neopets HTML, the formatted API input will appear here..."
+            placeholder="When pasting Neopets HTML using the button on the left, the formatted API input will appear here..."
             class="grow min-h-0"
           />
           <Button
@@ -82,17 +82,30 @@
 
       <Card class="grow shrink-0 basis-[600px] bg-[#f8fafc]">
         <CardHeader class="flex flex-row items-center justify-between gap-4">
-          <div class="grid grid-cols-[auto_1fr] items-center gap-2">
-            <Switch id="show-figures" v-model:checked="showFigures"/>
-            <Label for="show-figures" class="leading-5">Show original figures on game boards (if available)<br><span class="text-gray-400">If turned off, a numeric representation will be shown.</span></Label>
+          <div class="flex gap-4">
+            <div class="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-4">
+              <Switch id="show-figures" v-model:checked="showFigures"/>
+              <Label for="show-figures" class="leading-5">Show original figures on game boards (if available)<br><span class="text-gray-400">If turned off, a numeric representation will be shown.</span></Label>
+
+              <Switch
+                id="calculate-in-browser"
+                v-model:checked="calculateInBrowser"
+                :disabled="runtimeConfig.public.calculateInBrowserOnly"
+              />
+              <Label for="calculate-in-browser" class="leading-5">Calculate in-browser (experimental)<br><span class="text-gray-400">This will run the calculation in your browser instead of in the Bun-powered server.</span></Label>
+            </div>
           </div>
+
           <Settings class="text-[#c1c4c7]"/>
         </CardHeader>
       </Card>
     </div>
 
     <h1 v-if="pending || result">
-      <template v-if="pending">
+      <template v-if="pending && calculateInBrowser">
+        Cracking the puzzle (this can take a while)<div class="loader"></div>
+      </template>
+      <template v-else-if="pending">
         Loading results<div class="loader"></div>
       </template>
       <template v-else>
@@ -114,7 +127,8 @@
           <p>{{ result.solutions.length > 0 ? '✅' : '❌' }} <strong>{{ result.solutions.length > 0 ? `${result.solutions.length} solution${result.solutions.length > 1 ? 's' : ''} found` : 'no solution found' }}</strong></p>
           <p>ℹ️ <strong>{{ result.meta.returningMaxOneSolution ? 'Maximum of one solution returned for better performance' : 'Looked for all possible solutions' }}</strong></p>
           <p>⏱️ <strong>{{ formatDuration(result.meta.calculationDuration) }}</strong> to calculate the situation</p>
-          <p>🧠 <strong>{{ formatMemory(result.meta.maxMemoryUsed) }}</strong> max memory used</p>
+          <p v-if="calculateInBrowser">🧠 <em>Max memory cannot be measured when calculating in-browser</em></p>
+          <p v-else>🧠 <strong>{{ formatMemory(result.meta.maxMemoryUsed) }}</strong> max memory used</p>
           <br>
           <p><strong>{{ numberFormatter.format(result.meta.totalNumberOfPossibleCombinations) }}</strong> possible puzzle piece combinations in total</p>
           <p><strong>{{ numberFormatter.format(result.meta.totalNumberOfIteratorPlacementAttempts) }}</strong> puzzle piece placement attempts</p>
@@ -228,15 +242,17 @@ import {
   Settings,
   X,
 } from 'lucide-vue-next';
-import type { Puzzle } from '#build/types/nitro-imports';
-import type { PuzzleOptions } from '~~/server/utils/PuzzleLibrary';
+import ShapeshifterWorker from '@/utils/shapeshifter-worker?worker';
 
-const result = ref<Puzzle>();
+const runtimeConfig = useRuntimeConfig();
+
+const result = ref<InstanceType<typeof Puzzle>>();
 const resultHash = ref<string>();
 const pending = ref<false | 'input' | 'example'>(false);
 const error = ref<string>();
 
 const showFigures = useLocalStorage('showFigures', true);
+const calculateInBrowser = useLocalStorage('calculateInBrowser', runtimeConfig.public.calculateInBrowserOnly);
 const showPossibleSolutionStarts = ref(false);
 
 const puzzleOptions = ref<PuzzleOptions>();
@@ -263,7 +279,20 @@ async function copyToClipboard () {
   }
 }
 
+let shapeshifterWorker: InstanceType<typeof ShapeshifterWorker>;
+
+watch(calculateInBrowser, (value) => {
+  if (value) {
+    shapeshifterWorker = new ShapeshifterWorker();
+  }
+  else {
+    shapeshifterWorker?.terminate();
+  }
+}, { immediate: true });
+
 let controller: AbortController;
+
+// const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function calculate (payload?: PuzzleOptions) {
   error.value = undefined;
@@ -276,25 +305,48 @@ async function calculate (payload?: PuzzleOptions) {
     pending.value = false;
   });
 
-  let response: Puzzle | undefined;
-  try {
-    response = await $fetch<Puzzle>('/api/calculate-solutions', {
-      method: 'POST',
-      timeout: 0,
-      retry: 0,
-      retryDelay: 0,
-      signal: controller.signal,
-      ...(payload ? { body: payload } : {}),
-    });
+  let response: InstanceType<typeof Puzzle> | undefined;
+
+  if (calculateInBrowser.value) {
+    try {
+      response = await new Promise((resolve, reject) => {
+        shapeshifterWorker.onmessage = (event) => {
+          resolve(event.data);
+        };
+
+        shapeshifterWorker.onerror = (event) => {
+          reject(event);
+        };
+
+        shapeshifterWorker.postMessage(payload ?? PuzzleLibrary.level10);
+      });
+    }
+    catch (err) {
+      error.value = (err as Error).toString();
+      result.value = undefined;
+      throw err;
+    }
   }
-  catch (err) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    error.value = JSON.stringify((err as any).data.data, null, 2);
-    result.value = undefined;
-    throw err;
+  else {
+    try {
+      response = await $fetch<InstanceType<typeof Puzzle>>('/api/calculate-solutions', {
+        method: 'POST',
+        timeout: 0,
+        retry: 0,
+        retryDelay: 0,
+        signal: controller.signal,
+        ...(payload ? { body: payload } : {}),
+      });
+    }
+    catch (err) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      error.value = JSON.stringify((err as any).data.data, null, 2);
+      result.value = undefined;
+      throw err;
+    }
   }
 
-  resultHash.value = await hashObject(response);
+  resultHash.value = await hashObject(response!);
   result.value = response;
   pending.value = false;
 }

@@ -1,0 +1,8 @@
+[build]
+  base = "/"
+  command = "bun --bun run build:netlify"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+  NUXT_PUBLIC_CALCULATE_IN_BROWSER_ONLY = "true"

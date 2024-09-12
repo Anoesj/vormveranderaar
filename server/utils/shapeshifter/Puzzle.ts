@@ -550,6 +550,7 @@ export class Puzzle {
 
     for (let i = 0; i < possiblePositionCount; i++) {
       this.meta.totalNumberOfIteratorPlacementAttempts++;
+      this.#measureMemoryUsage();
 
       // const p0 = performance.now();
       const position = possiblePositions[i]!;
@@ -882,8 +883,16 @@ export class Puzzle {
   /**
    * @returns The current memory usage in bytes.
    */
-  #getMemoryUsage () {
-    const memory = process.memoryUsage.rss();
+  #measureMemoryUsage () {
+    let memory: number;
+
+    if (import.meta.client) {
+      // performance.memory doesn't work in Web Workers.
+      memory = 0;
+    }
+    else {
+      memory = process.memoryUsage.rss();
+    }
 
     if (memory > this.meta.maxMemoryUsed) {
       this.meta.maxMemoryUsed = memory;
@@ -903,7 +912,7 @@ export class Puzzle {
    * @returns The current memory usage in MB.
    */
   #logMemoryUsage () {
-    const memory = this.#getMemoryUsage();
+    const memory = this.#measureMemoryUsage();
     console.log('Current memory usage:', this.#memoryToString(memory));
     return memory;
   }

@@ -12,6 +12,11 @@ export default defineNuxtConfig({
     '@nuxtjs/tailwindcss',
     'shadcn-nuxt',
   ],
+  imports: {
+    dirs: [
+      'utils/**',
+    ],
+  },
   shadcn: {
     prefix: '',
     componentDir: './app/components/ui',
@@ -20,6 +25,11 @@ export default defineNuxtConfig({
     preset: 'bun',
     experimental: {
       websocket: true,
+    },
+  },
+  runtimeConfig: {
+    public: {
+      calculateInBrowserOnly: false,
     },
   },
 });
