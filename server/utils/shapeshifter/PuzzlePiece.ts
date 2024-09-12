@@ -18,7 +18,7 @@ export class PuzzlePiece {
   possiblePositions: Position[];
   possiblePositionsWhereCornersNotAffected: Position[];
 
-  #gameBoardGridCache: WeakMap<Position, GameBoard> = new WeakMap();
+  #gameBoardGridCache: Map<Position, GameBoard> = new Map();
 
   constructor (grid: GridLike<number>, id: string, gameBoard: GameBoard) {
     this.id = id;
@@ -55,6 +55,8 @@ export class PuzzlePiece {
     this.possiblePositions = this.#possiblePositions;
     this.possiblePositionsWhereCornersNotAffected = this.possiblePositions
       .filter((position) => {
+        // NOTE: This warms the #gameBoardGridCache too. If you ever want to remove this,
+        // make sure to warm the cache in the constructor instead!
         const onGameBoardGrid = this.toEmptyGameBoardWithPuzzlePieceAt(position);
 
         return (

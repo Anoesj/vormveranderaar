@@ -91,6 +91,7 @@ export class Puzzle {
     tBruteForceStart: number | null;
     tBruteForceEnd: number | null;
     tEnd: number | null;
+    tLastStillThinkingLog: number | null;
   } = {
     tStart: performance.now(),
     tPrepareSolutionStartsStart: null,
@@ -98,13 +99,13 @@ export class Puzzle {
     tBruteForceStart: null,
     tBruteForceEnd: null,
     tEnd: null,
+    tLastStillThinkingLog: null,
   };
 
   #perf: {
     toEmptyGameBoardWithPuzzlePieceAt: number[];
     gameBoardClone: number[];
     gameBoardStack: number[];
-    calculatedSameSituationBefore: number[];
     possibleSolutionClone: number[];
     countIncorrectCells: number[];
     getNextPuzzlePiecesMaxInfluencedCells: number[];
@@ -112,7 +113,6 @@ export class Puzzle {
     toEmptyGameBoardWithPuzzlePieceAt: [],
     gameBoardClone: [],
     gameBoardStack: [],
-    calculatedSameSituationBefore: [],
     possibleSolutionClone: [],
     countIncorrectCells: [],
     getNextPuzzlePiecesMaxInfluencedCells: [],
@@ -508,6 +508,8 @@ export class Puzzle {
 
       const currentPuzzlePiecePlacementOptions = unusedPuzzlePiecesPlacementOptions.shift()!;
 
+      this.#timings.tLastStillThinkingLog = performance.now();
+
       for (const possibleSolution of this.#puzzlePiecePlacementOptionsIterator({
         gameBoard,
         baseSolution: possibleSolutionStart,
@@ -550,7 +552,20 @@ export class Puzzle {
 
     for (let i = 0; i < possiblePositionCount; i++) {
       this.meta.totalNumberOfIteratorPlacementAttempts++;
-      this.#measureMemoryUsage();
+      // this.#measureMemoryUsage();
+
+      const now = performance.now();
+      if (now - this.#timings.tLastStillThinkingLog! > 5000) {
+        this.#timings.tLastStillThinkingLog = now;
+
+        console.log(
+          'Still thinking.'
+          + `\nNumber of puzzle piece placement attempts so far: ${numberFormatter.format(this.meta.totalNumberOfIteratorPlacementAttempts)}`
+          + `\nNumber of skipped impossible situations: ${numberFormatter.format(this.meta.skippedImpossibleSituations)}`
+          + `\nPercentage of all possible combinations tried: ${numberFormatter.format(this.meta.skippedImpossibleSituations / this.meta.totalNumberOfPossibleCombinations * 100)}%`
+          + `\nTime passed: ${this.#milliSecondsToString(now - this.#timings.tStart)}`
+        );
+      }
 
       // const p0 = performance.now();
       const position = possiblePositions[i]!;
@@ -561,36 +576,31 @@ export class Puzzle {
       // const p2 = performance.now();
       const after = gameBoard.stack(this.figuresCount, grid);
 
-      // NOTE: We used to check if we had this exact situation before, but this takes up too much memory.
       // const p3 = performance.now();
-      // const shouldAbort = this.#calculatedSameSituationBefore(next.map(p => p.puzzlePiece), after);
-      // const p4 = performance.now();
 
       // this.#perf.toEmptyGameBoardWithPuzzlePieceAt.push(p1 - p0);
       // this.#perf.gameBoardClone.push(p2 - p1);
       // this.#perf.gameBoardStack.push(p3 - p2);
-      // this.#perf.calculatedSameSituationBefore.push(p4 - p3);
-
-      // if (shouldAbort) {
-      //   this.meta.skippedDuplicateSituations += MathHelper.product(next.map(p => p.possiblePositions.length));
-      //   continue;
-      // }
 
       const puzzlePiecesLeft = next.length;
 
+      // const p4 = performance.now();
+      let numberOfTransformsNeeded: number;
+      if (this.figuresCount > 2) {
+        numberOfTransformsNeeded = after.countTransformsNeededUntilEveryValueIs(this.targetFigure.value, this.figuresCount);
+      }
+      else {
+        numberOfTransformsNeeded = after.countIncorrectCells(this.targetFigure.value);
+      }
+
       // const p5 = performance.now();
-      const afterCorrectCellsCount = after.countValue(this.targetFigure.value);
-      const afterIncorrectCellsCount = after.cells - afterCorrectCellsCount;
-
-      // const p6 = performance.now();
-
       const nextPuzzlePiecesMaxInfluencedCells = this.#maxCellsInfluencedPerPuzzlePiecesLeft.get(puzzlePiecesLeft)!;
 
-      // const p7 = performance.now();
-      const canBeSolvedFromHere = afterIncorrectCellsCount <= nextPuzzlePiecesMaxInfluencedCells;
+      // const p6 = performance.now();
+      const canBeSolvedFromHere = numberOfTransformsNeeded <= nextPuzzlePiecesMaxInfluencedCells;
 
-      // this.#perf.countIncorrectCells.push(p6 - p5);
-      // this.#perf.getNextPuzzlePiecesMaxInfluencedCells.push(p7 - p6);
+      // this.#perf.countIncorrectCells.push(p5 - p4);
+      // this.#perf.getNextPuzzlePiecesMaxInfluencedCells.push(p6 - p5);
 
       if (!canBeSolvedFromHere) {
         // If at the final level, we skip 1 impossible situation.

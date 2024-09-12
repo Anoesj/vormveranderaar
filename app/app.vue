@@ -8,13 +8,38 @@
 
         <CardContent>
           <Button
-            v-if="pending !== 'input'"
+            v-if="pending !== 'html'"
             :disabled="pending"
             class="w-full gap-1"
-            @click="getClipboardContents()"
+            @click="getClipboardContents('html')"
           >
             <ClipboardPaste/>
             Paste Neopets HTML
+          </Button>
+          <Button
+            v-else
+            variant="destructive"
+            @click="cancel"
+            class="w-full gap-1"
+          >
+            <X/>
+            Cancel
+          </Button>
+        </CardContent>
+
+        <CardContent class="mt-[-1rem] pb-1">
+          <Separator class="my-4" label="Or" labelClass="bg-[#f8fafc]" />
+        </CardContent>
+
+        <CardContent>
+          <Button
+            v-if="pending !== 'input'"
+            :disabled="pending"
+            class="w-full gap-1"
+            @click="getClipboardContents('input')"
+          >
+            <ClipboardPaste/>
+            Paste API input
           </Button>
           <Button
             v-else
@@ -37,7 +62,7 @@
             variant="secondary"
             :disabled="pending"
             class="w-full gap-1"
-            @click="calculate()"
+            @click="calculate('example')"
           >
             <Calculator/>
             Calculate example
@@ -68,14 +93,13 @@
             class="grow min-h-0"
           />
           <Button
-            v-if="pending !== 'input'"
             variant="secondary"
             :disabled="!puzzleOptionsStringified"
             class="w-full gap-1"
             @click="copyToClipboard()"
           >
             <Copy/>
-            Copy
+            Copy API input
           </Button>
         </CardContent>
       </Card>
@@ -121,8 +145,8 @@
         'opacity-50': pending,
       }"
     >
-      <div class="flex gap-8">
-        <div class="flex-1">
+      <div class="flex gap-8 flex-wrap">
+        <div class="grow shrink-0 basis-[400px]">
           <h2>Info</h2>
           <p>{{ result.solutions.length > 0 ? '✅' : '❌' }} <strong>{{ result.solutions.length > 0 ? `${result.solutions.length} solution${result.solutions.length > 1 ? 's' : ''} found` : 'no solution found' }}</strong></p>
           <p>ℹ️ <strong>{{ result.meta.returningMaxOneSolution ? 'Maximum of one solution returned for better performance' : 'Looked for all possible solutions' }}</strong></p>
@@ -136,9 +160,9 @@
           <p><strong>{{ numberFormatter.format(result.meta.skippedDuplicateSituations) }}</strong> combinations skipped due to duplicate situations</p>
           <p><strong>{{ numberFormatter.format(result.meta.skippedImpossibleSituations) }}</strong> combinations skipped due to impossible situations</p>
         </div>
-        <div class="flex-1">
+        <div class="grow shrink-0 basis-[400px] overflow-x-auto">
           <h2>Game board</h2>
-          <div class="f mt-4">
+          <div class="f flex-wrap mt-4">
             <div>
               <div>Current</div>
               <Grid :grid="result.gameBoard" />
@@ -155,13 +179,13 @@
         </div>
       </div>
 
-      <Details class="mt-8">
+      <Details class="mt-8" forceOpenOnPrint>
         <template #summary>
           <h2 class="flex items-center gap-2">
             <PuzzleIcon class="mx-0 grow-0"/> Puzzle pieces ({{ Object.keys(result.puzzlePieces).length }})
           </h2>
         </template>
-        <div class="g overflow-x-auto">
+        <div class="flex items-start gap-4 flex-wrap overflow-x-auto">
           <div
             v-for="puzzlePiece of result.puzzlePieces"
             :key="puzzlePiece.id"
@@ -173,7 +197,7 @@
         </div>
       </Details>
 
-      <Details @toggle="showPossibleSolutionStarts = $event">
+      <Details>
         <template #summary>
           <h2 class="flex items-center gap-2">
             <CircleDashed/>
@@ -181,23 +205,21 @@
           </h2>
         </template>
 
-        <template v-if="showPossibleSolutionStarts">
-          <p v-if="!result.possibleSolutionStarts.length">
-            No solutions for corners possible.
-          </p>
-          <template v-else>
-            <PossibleSolutionStart
-              v-for="(possibleSolutionStart, index) of result.possibleSolutionStarts"
-              :key="index"
-              :nth="index + 1"
-              :possibleSolutionStart="possibleSolutionStart"
-              :totalPuzzlePiecesCount="Object.keys(result.puzzlePieces).length"
-            />
-          </template>
+        <p v-if="!result.possibleSolutionStarts.length">
+          No solutions for corners possible.
+        </p>
+        <template v-else>
+          <PossibleSolutionStart
+            v-for="(possibleSolutionStart, index) of result.possibleSolutionStarts"
+            :key="index"
+            :nth="index + 1"
+            :possibleSolutionStart="possibleSolutionStart"
+            :totalPuzzlePiecesCount="Object.keys(result.puzzlePieces).length"
+          />
         </template>
       </Details>
 
-      <Details open>
+      <Details open forceOpenOnPrint>
         <template #summary>
           <h2 class="flex items-center gap-2">
             <BadgeCheck/>
@@ -211,6 +233,7 @@
             :key="index"
             :nth="index + 1"
             :only="result.solutions.length === 1"
+            :forceOpenOnPrint="result.solutions.length === 1"
             :solution="solution"
           />
         </template>
@@ -246,14 +269,15 @@ import ShapeshifterWorker from '@/utils/shapeshifter-worker?worker';
 
 const runtimeConfig = useRuntimeConfig();
 
+type InputType = 'html' | 'input' | 'example';
+
 const result = ref<InstanceType<typeof Puzzle>>();
 const resultHash = ref<string>();
-const pending = ref<false | 'input' | 'example'>(false);
+const pending = ref<false | InputType>(false);
 const error = ref<string>();
 
 const showFigures = useLocalStorage('showFigures', true);
 const calculateInBrowser = useLocalStorage('calculateInBrowser', runtimeConfig.public.calculateInBrowserOnly);
-const showPossibleSolutionStarts = ref(false);
 
 const puzzleOptions = shallowRef<PuzzleOptions>();
 const puzzleOptionsStringified = usePuzzleOptionsStringified(puzzleOptions);
@@ -261,11 +285,15 @@ const puzzleOptionsStringified = usePuzzleOptionsStringified(puzzleOptions);
 provide(showFiguresKey, showFigures);
 provide(resultKey, result);
 
-async function getClipboardContents () {
+async function getClipboardContents (inputType: Exclude<InputType, 'example'>) {
   try {
     const text = await navigator.clipboard.readText();
-    puzzleOptions.value = parseNeopetsHtml(text);
-    calculate(puzzleOptions.value);
+
+    puzzleOptions.value = inputType === 'html'
+      ? parseNeopetsHtml(text)
+      : Function('"use strict"; return (' + text + ')')() as PuzzleOptions;
+
+    calculate(inputType, puzzleOptions.value);
   } catch (err) {
     console.error('Failed to calculate from clipboard contents', err);
   }
@@ -290,19 +318,30 @@ watch(calculateInBrowser, (value) => {
   }
 }, { immediate: true });
 
+function restartShapeshifterWorker() {
+  shapeshifterWorker?.terminate();
+  shapeshifterWorker = new ShapeshifterWorker();
+}
+
 let controller: AbortController;
 
 // const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-async function calculate (payload?: PuzzleOptions) {
+async function calculate (inputType: 'example'): Promise<void>;
+async function calculate (inputType: 'input' | 'html', payload: PuzzleOptions): Promise<void>;
+async function calculate (inputType: InputType, payload?: PuzzleOptions) {
   error.value = undefined;
-  pending.value = payload ? 'input' : 'example';
+  pending.value = inputType;
 
   // NOTE: Unfortunately, canceling a request does not stop the calculation in the backend.
   // You can't solve it at all, even with WebSockets/SSE. What a great day.
   controller = new AbortController();
   controller.signal.addEventListener('abort', () => {
     pending.value = false;
+
+    if (calculateInBrowser.value) {
+      restartShapeshifterWorker();
+    }
   });
 
   let response: InstanceType<typeof Puzzle> | undefined;
@@ -318,7 +357,7 @@ async function calculate (payload?: PuzzleOptions) {
           reject(event);
         };
 
-        shapeshifterWorker.postMessage(payload ?? PuzzleLibrary.level10);
+        shapeshifterWorker.postMessage(payload ?? PuzzleLibrary.level30);
       });
     }
     catch (err) {
@@ -355,8 +394,11 @@ function cancel() {
   controller?.abort('User canceled');
 }
 
-function print() {
+async function print() {
+  window.dispatchEvent(new CustomEvent('custombeforeprint'));
+  await nextTick();
   window.print();
+  window.dispatchEvent(new CustomEvent('customafterprint'));
 }
 
 // <link rel="preconnect" href="https://fonts.googleapis.com">

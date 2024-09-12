@@ -38,7 +38,7 @@ export class Grid {
   }
 
   get #colsCount () {
-    return this.data[0].length;
+    return this.data[0]!.length;
   }
 
   get (x: number, y: number) {
@@ -72,7 +72,7 @@ export class Grid {
 
     for (let rowIndex = 0; rowIndex < rows; rowIndex++) {
       for (let colIndex = 0; colIndex < cols; colIndex++) {
-        if (data[rowIndex][colIndex] === value) {
+        if (data[rowIndex]![colIndex] === value) {
           count++;
         }
       }
@@ -103,7 +103,7 @@ export class Grid {
           str += ',';
         }
 
-        str += String(data[rowIndex][colIndex]).padStart(3, ' ');
+        str += String(data[rowIndex]![colIndex]).padStart(3, ' ');
       }
     }
 

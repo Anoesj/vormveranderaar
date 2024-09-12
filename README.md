@@ -6,6 +6,8 @@
 ## Building the app
 - `bun --bun run build` to build the app.
 
+In order to test the Netlify build locally and preview it, run: `NETLIFY=true bun --bun nuxt build && bunx serve dist`.
+
 ## Technical info
 ### Solving the puzzle
 Todo
