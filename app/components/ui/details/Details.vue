@@ -5,7 +5,7 @@
     :open="isOpen"
     @toggle="handleToggle"
   >
-    <summary class="flex justify-between items-center px-4 py-3 cursor-pointer font-semibold">
+    <summary class="flex justify-between items-center gap-4 px-4 py-3 cursor-pointer font-semibold">
       <slot name="summary">
         Details
       </slot>

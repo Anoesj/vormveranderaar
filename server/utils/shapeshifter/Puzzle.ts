@@ -559,14 +559,22 @@ export class Puzzle {
 
         const timePassed = now - this.#timings.tStart;
 
-        console.log(
-          'Still thinking.'
+        const msg = (
+          'Still thinking...'
           + `\nNumber of puzzle piece placement attempts so far: ${numberFormatter.format(this.meta.totalNumberOfIteratorPlacementAttempts)}`
           + `\nNumber of skipped impossible situations: ${numberFormatter.format(this.meta.skippedImpossibleSituations)}`
+          + `\nTotal possible combinations: ${numberFormatter.format(this.meta.totalNumberOfPossibleCombinations)}`
           + `\nPercentage of all possible combinations tried: ${numberFormatter.format(this.meta.skippedImpossibleSituations / this.meta.totalNumberOfPossibleCombinations * 100)}%`
           + `\nTime passed: ${this.#milliSecondsToString(timePassed)}`
           + `\nThroughput: ${numberFormatter.format(this.meta.skippedImpossibleSituations / (timePassed / 1000))} situations per second`
         );
+
+        console.log(msg);
+
+        postMessage({
+          event: 'status-update',
+          payload: msg,
+        });
 
         this.#logPerfStats();
       }

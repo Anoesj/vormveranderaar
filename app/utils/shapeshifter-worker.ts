@@ -3,5 +3,9 @@ onmessage = async (e) => {
 
   const puzzle = new Puzzle(e.data);
   await puzzle.bruteForceSolution();
-  postMessage(puzzle);
+
+  postMessage({
+    event: 'finished',
+    payload: puzzle,
+  });
 };

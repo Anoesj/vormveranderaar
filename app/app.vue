@@ -104,7 +104,7 @@
         </CardContent>
       </Card>
 
-      <Card class="grow shrink-0 basis-[600px] bg-[#f8fafc]">
+      <Card class="grow shrink-0 basis-[min(600px,100%-4rem)] bg-[#f8fafc]">
         <CardHeader class="flex flex-row items-center justify-between gap-4">
           <div class="flex gap-4">
             <div class="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-4">
@@ -120,135 +120,138 @@
             </div>
           </div>
 
-          <Settings class="text-[#c1c4c7]"/>
+          <Settings class="text-[#c1c4c7] grow-0 shrink-0"/>
         </CardHeader>
       </Card>
     </div>
 
-    <h1 v-if="pending || result">
-      <template v-if="pending && calculateInBrowser">
-        Cracking the puzzle (this can take a while)<div class="loader"></div>
-      </template>
-      <template v-else-if="pending">
-        Loading results<div class="loader"></div>
-      </template>
-      <template v-else>
-        Results
-      </template>
-    </h1>
+    <Transition name="fade" mode="out-in">
+      <div v-if="pending && calculateInBrowser">
+        <h1>Cracking the puzzle (this can take a while)<div class="loader"></div></h1>
 
-    <div
-      v-if="result"
-      :key="resultHash"
-      class="wrapper"
-      :class="{
-        'opacity-50': pending,
-      }"
-    >
-      <div class="flex gap-8 flex-wrap">
-        <div class="grow shrink-0 basis-[400px]">
-          <h2>Info</h2>
-          <p>{{ result.solutions.length > 0 ? '✅' : '❌' }} <strong>{{ result.solutions.length > 0 ? `${result.solutions.length} solution${result.solutions.length > 1 ? 's' : ''} found` : 'no solution found' }}</strong></p>
-          <p>ℹ️ <strong>{{ result.meta.returningMaxOneSolution ? 'Maximum of one solution returned for better performance' : 'Looked for all possible solutions' }}</strong></p>
-          <p>⏱️ <strong>{{ formatDuration(result.meta.calculationDuration) }}</strong> to calculate the situation</p>
-          <p v-if="calculateInBrowser">🧠 <em>Max memory cannot be measured when calculating in-browser</em></p>
-          <p v-else>🧠 <strong>{{ formatMemory(result.meta.maxMemoryUsed) }}</strong> max memory used</p>
-          <br>
-          <p><strong>{{ numberFormatter.format(result.meta.totalNumberOfPossibleCombinations) }}</strong> possible puzzle piece combinations in total</p>
-          <p><strong>{{ numberFormatter.format(result.meta.totalNumberOfIteratorPlacementAttempts) }}</strong> puzzle piece placement attempts</p>
-          <p><strong>{{ numberFormatter.format(result.meta.totalNumberOfTriedCombinations) }}</strong> probable solutions validated</p>
-          <p><strong>{{ numberFormatter.format(result.meta.skippedDuplicateSituations) }}</strong> combinations skipped due to duplicate situations</p>
-          <p><strong>{{ numberFormatter.format(result.meta.skippedImpossibleSituations) }}</strong> combinations skipped due to impossible situations</p>
-        </div>
-        <div class="grow shrink-0 basis-[400px] overflow-x-auto">
-          <h2>Game board</h2>
-          <div class="f flex-wrap gap-y-4 mt-4">
-            <div>
-              <div>Current</div>
-              <Grid :grid="result.gameBoard" />
+        <Transition name="fade">
+          <pre v-if="status" class="wrapper font-[inherit]">{{ status }}</pre>
+        </Transition>
+      </div>
+      <h1 v-else-if="pending">
+        Loading results<div class="loader"></div>
+      </h1>
+      <div v-else-if="error">
+        <h1>Error</h1>
+        <pre class="wrapper font-[inherit]">{{ error }}</pre>
+      </div>
+      <div v-else-if="result">
+        <h1>Results</h1>
+        <div
+          :key="resultHash"
+          class="wrapper"
+          :class="{
+            'opacity-50': pending,
+          }"
+        >
+          <div class="flex gap-8 flex-wrap">
+            <div class="grow shrink-0 basis-[400px]">
+              <h2>Info</h2>
+              <p>{{ result.solutions.length > 0 ? '✅' : '❌' }} <strong>{{ result.solutions.length > 0 ? `${result.solutions.length} solution${result.solutions.length > 1 ? 's' : ''} found` : 'no solution found' }}</strong></p>
+              <p>ℹ️ <strong>{{ result.meta.returningMaxOneSolution ? 'Maximum of one solution returned for better performance' : 'Looked for all possible solutions' }}</strong></p>
+              <p>⏱️ <strong>{{ formatDuration(result.meta.calculationDuration) }}</strong> to calculate the situation</p>
+              <p v-if="calculateInBrowser">🧠 <em>Max memory cannot be measured when calculating in-browser</em></p>
+              <p v-else>🧠 <strong>{{ formatMemory(result.meta.maxMemoryUsed) }}</strong> max memory used</p>
+              <br>
+              <p><strong>{{ numberFormatter.format(result.meta.totalNumberOfPossibleCombinations) }}</strong> possible puzzle piece combinations in total</p>
+              <p><strong>{{ numberFormatter.format(result.meta.totalNumberOfIteratorPlacementAttempts) }}</strong> puzzle piece placement attempts</p>
+              <p><strong>{{ numberFormatter.format(result.meta.totalNumberOfTriedCombinations) }}</strong> probable solutions validated</p>
+              <p><strong>{{ numberFormatter.format(result.meta.skippedDuplicateSituations) }}</strong> combinations skipped due to duplicate situations</p>
+              <p><strong>{{ numberFormatter.format(result.meta.skippedImpossibleSituations) }}</strong> combinations skipped due to impossible situations</p>
             </div>
-            <div>
-              <div>&nbsp;</div>
-              ➡️
-            </div>
-            <div>
-              <div>Goal</div>
-              <Grid :grid="result.gameBoard" :replaceAllWith="result.targetFigure.value" />
+            <div class="grow shrink-0 basis-[400px] overflow-x-auto">
+              <h2>Game board</h2>
+              <div class="f flex-wrap gap-y-4 mt-4">
+                <div>
+                  <div>Current</div>
+                  <Grid :grid="result.gameBoard" />
+                </div>
+                <div>
+                  <div>&nbsp;</div>
+                  ➡️
+                </div>
+                <div>
+                  <div>Goal</div>
+                  <Grid :grid="result.gameBoard" :replaceAllWith="result.targetFigure.value" />
+                </div>
+              </div>
             </div>
           </div>
+
+          <Details class="mt-8" forceOpenOnPrint>
+            <template #summary>
+              <h2 class="flex items-center gap-2">
+                <PuzzleIcon class="grow-0 shrink-0"/>
+                Puzzle pieces ({{ Object.keys(result.puzzlePieces).length }})
+              </h2>
+            </template>
+            <div class="flex items-start gap-4 flex-wrap overflow-x-auto">
+              <div
+                v-for="puzzlePiece of result.puzzlePieces"
+                :key="puzzlePiece.id"
+              >
+                <h3>{{ puzzlePiece.id }}</h3>
+                <p>{{ puzzlePiece.possiblePositions.length }} possible positions</p>
+                <Grid :grid="puzzlePiece.grid" isPuzzlePieceGrid />
+              </div>
+            </div>
+          </Details>
+
+          <Details>
+            <template #summary>
+              <h2 class="flex items-center gap-2">
+                <CircleDashed class="grow-0 shrink-0"/>
+                Phase 1: prepare possible solution starts based on correct corner outputs ({{ numberFormatter.format(result.possibleSolutionStarts.length) }})
+              </h2>
+            </template>
+
+            <p v-if="!result.possibleSolutionStarts.length">
+              No solutions for corners possible.
+            </p>
+            <template v-else>
+              <PossibleSolutionStart
+                v-for="(possibleSolutionStart, index) of result.possibleSolutionStarts"
+                :key="index"
+                :nth="index + 1"
+                :possibleSolutionStart="possibleSolutionStart"
+                :totalPuzzlePiecesCount="Object.keys(result.puzzlePieces).length"
+              />
+            </template>
+          </Details>
+
+          <Details open forceOpenOnPrint>
+            <template #summary>
+              <h2 class="flex items-center gap-2">
+                <BadgeCheck class="grow-0 shrink-0"/>
+                Phase 2: solutions ({{ numberFormatter.format(result.solutions.length) }}{{ result.meta.returningMaxOneSolution ? ' — maximized at one' : '' }})
+              </h2>
+            </template>
+            <p v-if="!result.solutions.length">No solutions possible.</p>
+            <template v-else>
+              <Solution
+                v-for="(solution, index) of result.solutions"
+                :key="index"
+                :nth="index + 1"
+                :only="result.solutions.length === 1"
+                :forceOpenOnPrint="result.solutions.length === 1"
+                :solution="solution"
+              />
+            </template>
+          </Details>
+
+          <Button
+            size="lg"
+            @click="print"
+            class="my-8 w-full gap-1"
+          ><Printer/> Print results</Button>
         </div>
       </div>
-
-      <Details class="mt-8" forceOpenOnPrint>
-        <template #summary>
-          <h2 class="flex items-center gap-2">
-            <PuzzleIcon class="mx-0 grow-0"/> Puzzle pieces ({{ Object.keys(result.puzzlePieces).length }})
-          </h2>
-        </template>
-        <div class="flex items-start gap-4 flex-wrap overflow-x-auto">
-          <div
-            v-for="puzzlePiece of result.puzzlePieces"
-            :key="puzzlePiece.id"
-          >
-            <h3>{{ puzzlePiece.id }}</h3>
-            <p>{{ puzzlePiece.possiblePositions.length }} possible positions</p>
-            <Grid :grid="puzzlePiece.grid" isPuzzlePieceGrid />
-          </div>
-        </div>
-      </Details>
-
-      <Details>
-        <template #summary>
-          <h2 class="flex items-center gap-2">
-            <CircleDashed/>
-            Phase 1: prepare possible solution starts based on correct corner outputs ({{ numberFormatter.format(result.possibleSolutionStarts.length) }})
-          </h2>
-        </template>
-
-        <p v-if="!result.possibleSolutionStarts.length">
-          No solutions for corners possible.
-        </p>
-        <template v-else>
-          <PossibleSolutionStart
-            v-for="(possibleSolutionStart, index) of result.possibleSolutionStarts"
-            :key="index"
-            :nth="index + 1"
-            :possibleSolutionStart="possibleSolutionStart"
-            :totalPuzzlePiecesCount="Object.keys(result.puzzlePieces).length"
-          />
-        </template>
-      </Details>
-
-      <Details open forceOpenOnPrint>
-        <template #summary>
-          <h2 class="flex items-center gap-2">
-            <BadgeCheck/>
-            Phase 2: solutions ({{ numberFormatter.format(result.solutions.length) }}{{ result.meta.returningMaxOneSolution ? ' — maximized at one' : '' }})
-          </h2>
-        </template>
-        <p v-if="!result.solutions.length">No solutions possible.</p>
-        <template v-else>
-          <Solution
-            v-for="(solution, index) of result.solutions"
-            :key="index"
-            :nth="index + 1"
-            :only="result.solutions.length === 1"
-            :forceOpenOnPrint="result.solutions.length === 1"
-            :solution="solution"
-          />
-        </template>
-      </Details>
-
-      <Button
-        size="lg"
-        @click="print"
-        class="my-8 w-full gap-1"
-      ><Printer/> Print results</Button>
-    </div>
-    <div v-else-if="error">
-      <h2>Error</h2>
-      <pre>{{ error }}</pre>
-    </div>
+    </Transition>
   </div>
 </template>
 
@@ -275,6 +278,7 @@ const result = ref<InstanceType<typeof Puzzle>>();
 const resultHash = ref<string>();
 const pending = ref<false | InputType>(false);
 const error = ref<string>();
+const status = ref<string>();
 
 const isPrinting = shallowRef(false);
 
@@ -352,12 +356,27 @@ async function calculate (inputType: InputType, payload?: PuzzleOptions) {
 
   if (calculateInBrowser.value) {
     try {
-      response = await new Promise((resolve, reject) => {
-        shapeshifterWorker.onmessage = (event) => {
-          resolve(event.data);
+      response = await new Promise<InstanceType<typeof Puzzle>>((resolve, reject) => {
+        shapeshifterWorker.onmessage = ({ data }) => {
+          const { event, payload } = data as {
+            event: 'status-update',
+            payload: string;
+          } | {
+            event: 'finished',
+            payload: InstanceType<typeof Puzzle>;
+          };
+
+          if (event === 'finished') {
+            resolve(payload);
+            status.value = undefined;
+          }
+          else {
+            status.value = payload;
+          }
         };
 
         shapeshifterWorker.onerror = (event) => {
+          status.value = undefined;
           reject(event);
         };
 
@@ -426,6 +445,7 @@ useHead({
 @import '@/assets/css/tailwind.css';
 
 html {
+  --easing-cubic: cubic-bezier(0.4, 0, 0.2, 1);
   font-family: "Urbanist", sans-serif;
   font-optical-sizing: auto;
   font-size: 20px;
@@ -512,5 +532,17 @@ ul {
   40%{background-position:0% 100%, 50%   0%,100%  50%}
   60%{background-position:0%  50%, 50% 100%,100%   0%}
   80%{background-position:0%  50%, 50%  50%,100% 100%}
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition-property: opacity;
+  transition-duration: 0.15s;
+  transition-timing-function: var(--easing-cubic);
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>
