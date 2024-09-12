@@ -1,65 +1,94 @@
 <template>
   <div class="flex flex-col gap-6 py-8">
-    <div class="wrapper flex gap-4">
-      <Card class="flex-1 bg-[#f8fafc]">
+    <div class="wrapper flex flex-wrap gap-4">
+      <Card class="grow shrink-0 basis-[400px] bg-[#f8fafc]">
         <CardHeader>
           <CardTitle>Input</CardTitle>
         </CardHeader>
+
         <CardContent>
-          <div class="flex items-center gap-4">
-            <Textarea rows="4" cols="40" @paste="onPaste" placeholder="Neopets HTML input"/>
-          </div>
-        </CardContent>
-        <CardFooter>
           <Button
             v-if="pending !== 'input'"
-            @click="calculate(puzzleOptions)"
-            class="w-full"
-            :disabled="!puzzleOptions"
-          >Calculate</Button>
+            :disabled="pending"
+            class="w-full gap-1"
+            @click="getClipboardContents()"
+          >
+            <ClipboardPaste/>
+            Paste Neopets HTML
+          </Button>
           <Button
             v-else
             variant="destructive"
             @click="cancel"
-            class="w-full"
-          >Cancel</Button>
-        </CardFooter>
+            class="w-full gap-1"
+          >
+            <X/>
+            Cancel
+          </Button>
+        </CardContent>
+
         <CardContent class="mt-[-1rem] pb-1">
           <Separator class="my-4" label="Or" labelClass="bg-[#f8fafc]" />
         </CardContent>
+
         <CardFooter>
           <Button
-            v-if="pending !== 'fallback'"
+            v-if="pending !== 'example'"
             variant="secondary"
+            :disabled="pending"
+            class="w-full gap-1"
             @click="calculate()"
-            class="w-full"
-          >Calculate fallback</Button>
+          >
+            <Calculator/>
+            Calculate example
+          </Button>
           <Button
             v-else
             variant="destructive"
             @click="cancel"
-            class="w-full"
-          >Cancel</Button>
+            class="w-full gap-1"
+          >
+            <X/>
+            Cancel
+          </Button>
         </CardFooter>
       </Card>
 
-      <Card class="flex-1 bg-[#f8fafc]">
+      <Card class="grow shrink-0 basis-[400px] bg-[#f8fafc] flex flex-col">
         <CardHeader>
-          <CardTitle>Output</CardTitle>
+          <CardTitle>Formatted</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div class="flex items-center gap-4">
-            <Textarea rows="9" cols="40" readonly v-model="puzzleOptionsStringified" placeholder="Formatted to API input"/>
-          </div>
+        <CardContent class="flex flex-col gap-4 grow">
+          <Textarea
+            v-model="puzzleOptionsStringified"
+            rows="2"
+            cols="40"
+            readonly
+            placeholder="When pasting Neopets HTML, the formatted API input will appear here..."
+            class="grow min-h-0"
+          />
+          <Button
+            v-if="pending !== 'input'"
+            variant="secondary"
+            :disabled="!puzzleOptionsStringified"
+            class="w-full gap-1"
+            @click="copyToClipboard()"
+          >
+            <Copy/>
+            Copy
+          </Button>
         </CardContent>
       </Card>
-    </div>
 
-    <div class="wrapper">
-      <div class="grid grid-cols-[auto_1fr] items-center gap-2 my-4">
-        <Switch id="show-figures" v-model:checked="showFigures"/>
-        <Label for="show-figures" class="leading-5">Show original figures on game boards<br><span class="text-gray-400">If turned off, a numeric representation will be shown.</span></Label>
-      </div>
+      <Card class="grow shrink-0 basis-[600px] bg-[#f8fafc]">
+        <CardHeader class="flex flex-row items-center justify-between gap-4">
+          <div class="grid grid-cols-[auto_1fr] items-center gap-2">
+            <Switch id="show-figures" v-model:checked="showFigures"/>
+            <Label for="show-figures" class="leading-5">Show original figures on game boards (if available)<br><span class="text-gray-400">If turned off, a numeric representation will be shown.</span></Label>
+          </div>
+          <Settings class="text-[#c1c4c7]"/>
+        </CardHeader>
+      </Card>
     </div>
 
     <h1 v-if="pending || result">
@@ -89,7 +118,7 @@
           <br>
           <p><strong>{{ numberFormatter.format(result.meta.totalNumberOfPossibleCombinations) }}</strong> possible puzzle piece combinations in total</p>
           <p><strong>{{ numberFormatter.format(result.meta.totalNumberOfIteratorPlacementAttempts) }}</strong> puzzle piece placement attempts</p>
-          <p><strong>{{ numberFormatter.format(result.meta.totalNumberOfTriedCombinations) }}</strong> puzzle piece combinations validated</p>
+          <p><strong>{{ numberFormatter.format(result.meta.totalNumberOfTriedCombinations) }}</strong> probable solutions validated</p>
           <p><strong>{{ numberFormatter.format(result.meta.skippedDuplicateSituations) }}</strong> combinations skipped due to duplicate situations</p>
           <p><strong>{{ numberFormatter.format(result.meta.skippedImpossibleSituations) }}</strong> combinations skipped due to impossible situations</p>
         </div>
@@ -114,8 +143,8 @@
 
       <Details class="mt-8">
         <template #summary>
-          <h2>
-            Puzzle pieces ({{ Object.keys(result.puzzlePieces).length }})
+          <h2 class="flex items-center gap-2">
+            <PuzzleIcon class="mx-0 grow-0"/> Puzzle pieces ({{ Object.keys(result.puzzlePieces).length }})
           </h2>
         </template>
         <div class="g overflow-x-auto">
@@ -132,8 +161,9 @@
 
       <Details @toggle="showPossibleSolutionStarts = $event">
         <template #summary>
-          <h2>
-            Phase 1: possible solution starts based on correct corner outputs ({{ numberFormatter.format(result.possibleSolutionStarts.length) }})
+          <h2 class="flex items-center gap-2">
+            <CircleDashed/>
+            Phase 1: prepare possible solution starts based on correct corner outputs ({{ numberFormatter.format(result.possibleSolutionStarts.length) }})
           </h2>
         </template>
 
@@ -155,7 +185,10 @@
 
       <Details open>
         <template #summary>
-          <h2>Phase 2: solutions ({{ numberFormatter.format(result.solutions.length) }}{{ result.meta.returningMaxOneSolution ? ' — maximized at one' : '' }})</h2>
+          <h2 class="flex items-center gap-2">
+            <BadgeCheck/>
+            Phase 2: solutions ({{ numberFormatter.format(result.solutions.length) }}{{ result.meta.returningMaxOneSolution ? ' — maximized at one' : '' }})
+          </h2>
         </template>
         <p v-if="!result.solutions.length">No solutions possible.</p>
         <template v-else>
@@ -172,8 +205,8 @@
       <Button
         size="lg"
         @click="print"
-        class="my-8 w-full"
-      >Print results</Button>
+        class="my-8 w-full gap-1"
+      ><Printer/> Print results</Button>
     </div>
     <div v-else-if="error">
       <h2>Error</h2>
@@ -183,13 +216,24 @@
 </template>
 
 <script setup lang="ts">
-import type { Puzzle } from '#build/types/nitro-imports';
 import { useLocalStorage } from '@vueuse/core';
+import {
+  BadgeCheck,
+  Calculator,
+  CircleDashed,
+  ClipboardPaste,
+  Copy,
+  Printer,
+  Puzzle as PuzzleIcon,
+  Settings,
+  X,
+} from 'lucide-vue-next';
+import type { Puzzle } from '#build/types/nitro-imports';
 import type { PuzzleOptions } from '~~/server/utils/PuzzleLibrary';
 
 const result = ref<Puzzle>();
 const resultHash = ref<string>();
-const pending = ref<false | 'input' | 'fallback'>(false);
+const pending = ref<false | 'input' | 'example'>(false);
 const error = ref<string>();
 
 const showFigures = useLocalStorage('showFigures', true);
@@ -201,22 +245,29 @@ const puzzleOptionsStringified = usePuzzleOptionsStringified(puzzleOptions);
 provide(showFiguresKey, showFigures);
 provide(resultKey, result);
 
-function onPaste (event: ClipboardEvent) {
-  const html = event.clipboardData?.getData('text/plain');
-
-  if (!html) {
-    throw new Error('No HTML found in clipboard');
+async function getClipboardContents () {
+  try {
+    const text = await navigator.clipboard.readText();
+    puzzleOptions.value = parseNeopetsHtml(text);
+    calculate(puzzleOptions.value);
+  } catch (err) {
+    console.error('Failed to calculate from clipboard contents', err);
   }
+}
 
-  puzzleOptions.value = parseNeopetsHtml(html);
-  calculate(puzzleOptions.value);
+async function copyToClipboard () {
+  try {
+    await navigator.clipboard.writeText(puzzleOptionsStringified.value)
+  } catch (err) {
+    console.error('Failed to copy to clipboard', err);
+  }
 }
 
 let controller: AbortController;
 
 async function calculate (payload?: PuzzleOptions) {
   error.value = undefined;
-  pending.value = payload ? 'input' : 'fallback';
+  pending.value = payload ? 'input' : 'example';
 
   // NOTE: Unfortunately, canceling a request does not stop the calculation in the backend.
   // You can't solve it at all, even with WebSockets/SSE. What a great day.
@@ -298,15 +349,6 @@ body {
   background: none;
 }
 
-// details summary :is(h2, h3) {
-//   display: inline-block;
-// }
-
-// ul {
-//   list-style-position: inside;
-//   padding-left: 0;
-// }
-
 h1 {
   @apply wrapper text-3xl font-bold leading-10;
 }
@@ -324,7 +366,7 @@ h3 {
 }
 
 details summary h3 {
-  @apply text-base font-normal;
+  @apply text-base font-semibold;
 }
 
 h4 {
@@ -333,6 +375,12 @@ h4 {
 
 h5 {
   @apply text-base font-bold leading-8;
+}
+
+ul {
+  list-style: disc;
+  list-style-position: inside;
+  @apply leading-6;
 }
 
 .wrapper {

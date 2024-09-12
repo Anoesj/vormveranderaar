@@ -1,5 +1,5 @@
 <template>
-  <Details>
+  <Details nested>
     <template #summary>
       <h3>Possible solution start #{{ nth }} — {{ puzzlePiecesUsedCount }}/{{ totalPuzzlePiecesCount }} puzzle pieces — {{ state.emoji }} {{ state.explanation }}{{ state.type === 'incomplete' && possibleSolutionStart.continuationInfo ? ` — ${numberFormatter.format(possibleSolutionStart.continuationInfo.unusedPuzzlePiecesPossibleCombinations)} possible combinations` : '' }}</h3>
     </template>
@@ -14,8 +14,11 @@
       </template>
     </ul>
 
-    <h4>Puzzle pieces (before — placement — after):</h4>
-    <p v-if="!puzzlePiecesUsedCount">None.</p>
+    <h4 class="mt-4">Puzzle pieces (before — placement — after):</h4>
+    <template v-if="!puzzlePiecesUsedCount">
+      <p>None used.</p>
+      <p class="mt-4">ℹ️ <em>If this is the only displayed possible solution start, the preparation phase based on correct corner outputs is most likely disabled, and we just brute forced the puzzle from scratch.</em></p>
+    </template>
     <template v-else>
       <template
         v-for="part of possibleSolutionStart.parts"

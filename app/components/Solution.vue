@@ -1,5 +1,5 @@
 <template>
-  <Details :open="only">
+  <Details :open="only" nested>
     <template #summary>
       <h3>Solution #{{ nth }} — based on possible solution start #{{ solution.solutionStartIndex! + 1 }}</h3>
     </template>

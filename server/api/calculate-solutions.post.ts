@@ -2,7 +2,7 @@ export default defineEventHandler(async (event) => {
   // Get event data, which is in the form of PuzzleOptions.
   const body = await readBody<PuzzleOptions>(event);
 
-  const puzzleOptions = body || PuzzleLibrary.level32;
+  const puzzleOptions = body || PuzzleLibrary.level10;
 
   let puzzle: InstanceType<typeof Puzzle>;
 
