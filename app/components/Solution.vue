@@ -12,7 +12,7 @@
         <Label :for="sortCheckboxId" class="leading-5">Sort by puzzle piece order<br><span class="text-gray-400">Before and after situations will be greyed out if turned on, because the stacking of puzzle pieces is not recalculated upon changing sort order.</span></Label>
 
         <Switch v-model:checked="autoScroll" :id="autoScrollCheckboxId"/>
-        <Label :for="autoScrollCheckboxId" class="leading-5">Auto-scroll<br><span class="text-gray-400">Press ESC to stop auto-scrolling.</span></Label>
+        <Label :for="autoScrollCheckboxId" class="leading-5">Auto-scroll<br><span class="text-gray-400">Press Escape or scroll manually to stop auto-scrolling.</span></Label>
       </div>
 
       <template

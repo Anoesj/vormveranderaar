@@ -17,7 +17,7 @@
             'puzzle-piece-active-cell': isPuzzlePieceGrid && colVal,
             [`figure--${colVal}`]: !isPuzzlePieceGrid && !doShowFigures,
           },
-          `${!doShowFigures ? 'border-foreground border-[0.5px]' : ''} leading-none relative text-center`,
+          `${!doShowFigures ? 'border-foreground border' : ''} leading-none relative text-center`,
         ]"
       >
         <div class="w-9 h-9 flex items-center justify-center">

@@ -40,6 +40,7 @@ export function useAutoScroll (speed = 60, initialValue = false) {
 
     document.addEventListener('wheel', cancelAutoScroll, { passive: true });
     document.addEventListener('touchstart', cancelAutoScroll, { passive: true });
+    document.addEventListener('keydown', cancelAutoScrollIfEsc, { passive: true });
   }
 
   function stopAutoScroll() {
@@ -50,10 +51,17 @@ export function useAutoScroll (speed = 60, initialValue = false) {
 
     document.removeEventListener('wheel', cancelAutoScroll);
     document.removeEventListener('touchstart', cancelAutoScroll);
+    document.removeEventListener('keydown', cancelAutoScrollIfEsc);
   }
 
   function cancelAutoScroll() {
     autoScrollEnabled.value = false;
+  }
+
+  function cancelAutoScrollIfEsc(event: KeyboardEvent) {
+    if (event.key === 'Escape') {
+      cancelAutoScroll();
+    }
   }
 
   return autoScrollEnabled;
