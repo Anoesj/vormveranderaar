@@ -90,7 +90,16 @@ export class PossibleSolution {
   getContinuationInfo (puzzlePieces: PuzzlePiece[], avoidCorners: boolean) {
     const unusedPuzzlePieces = puzzlePieces.filter((puzzlePiece) => !this.parts.find((part) => puzzlePiece.id === part.id));
 
-    // Sort by how much they influence the game board (more influence comes first).
+    /*
+      Sort by how much they influence the game board (more influence comes first).
+
+      NOTE:
+      I tried sorting by possible positions count too, but that slowed down
+      the algorithm by 33%. This is probably because we skip a lot of options
+      as soon as we find out that the puzzle cannot be solved anymore.
+      If we handle the puzzle pieces with the most influence first,
+      we can skip options earlier.
+    */
     unusedPuzzlePieces.sort((a, b) => b.cellsInfluenced - a.cellsInfluenced);
 
     const unusedPuzzlePiecesCount = unusedPuzzlePieces.length;
