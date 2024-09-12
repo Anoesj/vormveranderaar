@@ -255,7 +255,7 @@ const showFigures = useLocalStorage('showFigures', true);
 const calculateInBrowser = useLocalStorage('calculateInBrowser', runtimeConfig.public.calculateInBrowserOnly);
 const showPossibleSolutionStarts = ref(false);
 
-const puzzleOptions = ref<PuzzleOptions>();
+const puzzleOptions = shallowRef<PuzzleOptions>();
 const puzzleOptionsStringified = usePuzzleOptionsStringified(puzzleOptions);
 
 provide(showFiguresKey, showFigures);
