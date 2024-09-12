@@ -43,6 +43,8 @@ export class Puzzle {
   targetFigure: Figure;
 
   gameBoard: GameBoard;
+  gameBoardCompleted: GameBoard;
+  gameBoardCompletedSum: number;
 
   puzzlePieces: Record<string, PuzzlePiece> = {};
   puzzlePiecesCount: number;
@@ -131,6 +133,8 @@ export class Puzzle {
     this.targetFigure = this.figures.at(-1)!;
 
     this.gameBoard = new GameBoard(options.gameBoard);
+    this.gameBoardCompleted = new GameBoard(options.gameBoard.map(row => row.map(_ => this.targetFigure.value)));
+    this.gameBoardCompletedSum = this.gameBoardCompleted.sum();
 
     for (const [i, puzzlePieceGrid] of options.puzzlePieces.entries()) {
       const id = String.fromCharCode(97 + i).toUpperCase();
@@ -147,7 +151,7 @@ export class Puzzle {
     console.log('\nGame board:', this.gameBoard.toString());
     console.log('\nPuzzle pieces:');
     for (const puzzlePiece of puzzlePieces) {
-      console.log(`\n${puzzlePiece.id}`);
+      console.log(`\n${puzzlePiece.id} (${puzzlePiece.possiblePositions.length} possible positions, ${puzzlePiece.cellsInfluenced} cells influenced):`);
       console.log(puzzlePiece.grid.toString());
     }
 
@@ -553,13 +557,18 @@ export class Puzzle {
       if (now - this.#timings.tLastStillThinkingLog! > 5000) {
         this.#timings.tLastStillThinkingLog = now;
 
+        const timePassed = now - this.#timings.tStart;
+
         console.log(
           'Still thinking.'
           + `\nNumber of puzzle piece placement attempts so far: ${numberFormatter.format(this.meta.totalNumberOfIteratorPlacementAttempts)}`
           + `\nNumber of skipped impossible situations: ${numberFormatter.format(this.meta.skippedImpossibleSituations)}`
           + `\nPercentage of all possible combinations tried: ${numberFormatter.format(this.meta.skippedImpossibleSituations / this.meta.totalNumberOfPossibleCombinations * 100)}%`
-          + `\nTime passed: ${this.#milliSecondsToString(now - this.#timings.tStart)}`
+          + `\nTime passed: ${this.#milliSecondsToString(timePassed)}`
+          + `\nThroughput: ${numberFormatter.format(this.meta.skippedImpossibleSituations / (timePassed / 1000))} situations per second`
         );
+
+        this.#logPerfStats();
       }
 
       // const p0 = performance.now();
@@ -580,13 +589,7 @@ export class Puzzle {
       const puzzlePiecesLeft = next.length;
 
       // const p4 = performance.now();
-      let numberOfTransformsNeeded: number;
-      if (this.figuresCount > 2) {
-        numberOfTransformsNeeded = after.countTransformsNeededUntilEveryValueIs(this.targetFigure.value, this.figuresCount);
-      }
-      else {
-        numberOfTransformsNeeded = after.countIncorrectCells(this.targetFigure.value);
-      }
+      const numberOfTransformsNeeded = this.gameBoardCompletedSum - after.sum();
 
       // const p5 = performance.now();
       const nextPuzzlePiecesMaxInfluencedCells = this.#maxCellsInfluencedPerPuzzlePiecesLeft.get(puzzlePiecesLeft)!;
@@ -759,12 +762,8 @@ export class Puzzle {
     const get1Count = (bin: string) => (bin.match(get1CountRe) || []).length;
 
     for (const [cornerType, cornerInfo] of Object.entries(this.cornersInfo!)) {
-      cornerInfo.puzzlePiecesThatCanAffectState = Object.values(
-        this.puzzlePieces
-      )
-        .filter(
-          (puzzlePiece) => puzzlePiece.activeCorners[cornerType as CornerType]
-        )
+      cornerInfo.puzzlePiecesThatCanAffectState = Object.values(this.puzzlePieces)
+        .filter((puzzlePiece) => puzzlePiece.activeCorners[cornerType as CornerType])
         .map((puzzlePiece) => puzzlePiece.id);
 
       cornerInfo.possiblePuzzlePieceCombinations = [];

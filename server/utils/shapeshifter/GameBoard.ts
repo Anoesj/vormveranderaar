@@ -35,33 +35,51 @@ export class GameBoard extends Grid {
     return this.construct(rows);
   }
 
-  countIncorrectCells (targetValue: Figure['value']) {
-    return this.cells - this.countValue(targetValue);
-  }
+  // countIncorrectCells (targetValue: Figure['value']) {
+  //   return this.cells - this.countValue(targetValue);
+  // }
 
-  countTransformsNeededUntilEveryValueIs (
-    targetValue: Figure['value'],
-    figuresCount: number,
-  ) {
+  // countTransformsNeededUntilEveryValueIs (
+  //   targetValue: Figure['value'],
+  //   figuresCount: number,
+  // ) {
+  //   const {
+  //     data,
+  //     cols,
+  //     rows,
+  //   } = this;
+
+  //   let count = 0;
+
+  //   for (let rowIndex = 0; rowIndex < rows; rowIndex++) {
+  //     for (let colIndex = 0; colIndex < cols; colIndex++) {
+  //       let value = data[rowIndex]![colIndex]!;
+  //       while (value !== targetValue) {
+  //         value = (value + 1) % figuresCount;
+  //         count++;
+  //       }
+  //     }
+  //   }
+
+  //   return count;
+  // }
+
+  sum () {
     const {
       data,
       cols,
       rows,
     } = this;
 
-    let count = 0;
-
+    // Without reduce, for better performance
+    let sum = 0;
     for (let rowIndex = 0; rowIndex < rows; rowIndex++) {
       for (let colIndex = 0; colIndex < cols; colIndex++) {
-        let value = data[rowIndex]![colIndex]!;
-        while (value !== targetValue) {
-          value = (value + 1) % figuresCount;
-          count++;
-        }
+        sum += data[rowIndex]![colIndex]!;
       }
     }
 
-    return count;
+    return sum;
   }
 
   checkIsSolution (targetValue: Figure['value']) {
