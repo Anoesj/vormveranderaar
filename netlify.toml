@@ -1,6 +1,6 @@
 [build]
   base = "/"
-  command = "bun --bun run build:netlify"
+  command = "pnpm nuxt build"
   publish = "dist"
 
 [build.environment]
