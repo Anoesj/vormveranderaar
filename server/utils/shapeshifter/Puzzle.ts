@@ -9,6 +9,7 @@ import { Figure } from './Figure';
 import { GameBoard } from './GameBoard';
 import { PuzzlePiece } from './PuzzlePiece';
 import { Position } from './Position';
+import { PerfStat } from './PerfStat';
 import type { GridLike } from './Grid';
 import { PossibleSolution, type PuzzlePiecePlacementOptions } from './PossibleSolution';
 
@@ -102,20 +103,14 @@ export class Puzzle {
     tLastStillThinkingLog: null,
   };
 
-  #perf: {
-    toEmptyGameBoardWithPuzzlePieceAt: number[];
-    gameBoardClone: number[];
-    gameBoardStack: number[];
-    possibleSolutionClone: number[];
-    countIncorrectCells: number[];
-    getNextPuzzlePiecesMaxInfluencedCells: number[];
-  } = {
-    toEmptyGameBoardWithPuzzlePieceAt: [],
-    gameBoardClone: [],
-    gameBoardStack: [],
-    possibleSolutionClone: [],
-    countIncorrectCells: [],
-    getNextPuzzlePiecesMaxInfluencedCells: [],
+  #perf = {
+    toEmptyGameBoardWithPuzzlePieceAt: new PerfStat,
+    gameBoardClone: new PerfStat,
+    gameBoardStack: new PerfStat,
+    possibleSolutionClone: new PerfStat,
+    countNumberOfTransformsNeeded: new PerfStat,
+    countNumberOfTransformsNeeded2: new PerfStat,
+    getNextPuzzlePiecesMaxInfluencedCells: new PerfStat,
   };
 
   #loggingDisabled = false;
@@ -689,16 +684,7 @@ export class Puzzle {
     this.#logTimeToBruteForce();
     console.log('Total time to calculate solution:', this.#milliSecondsToString(this.meta.calculationDuration));
     console.log('Max memory used:', this.#memoryToString(this.meta.maxMemoryUsed));
-
-    const perfStats = this.#perf;
-
-    for (const [k, v] of Object.entries(perfStats)) {
-      if (!v.length) continue;
-
-      const total = MathHelper.sum(v);
-      console.log(`\nAverage time spent in ${k}: ${total / v.length} ms`);
-      console.log(`Total time spent in ${k}: ${total} ms`);
-    }
+    this.#logPerfStats();
   }
 
   #logTimeToPrepareSolutionStarts () {
@@ -709,6 +695,19 @@ export class Puzzle {
 
   #logTimeToBruteForce () {
     console.log('Time to brute force the puzzle:', this.#milliSecondsToString(this.#timings.tBruteForceEnd! - this.#timings.tBruteForceStart!));
+  }
+
+  #logPerfStats () {
+    const perfStats = this.#perf;
+
+    for (const [k, v] of Object.entries(perfStats)) {
+      if (!v.length) continue;
+      console.log('');
+      console.log(
+        `Average time spent in ${k}: ${v.average} ms`
+        + `\nTotal time spent in ${k}: ${v.total} ms`
+      );
+    }
   }
 
   #createCornerInfo (corner: number) {
