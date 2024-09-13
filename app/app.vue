@@ -108,7 +108,10 @@
         <CardHeader class="flex flex-row items-center justify-between gap-4">
           <div class="flex gap-4">
             <div class="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-4">
-              <Switch id="show-figures" v-model:checked="showFigures"/>
+              <Switch
+                id="show-figures"
+                v-model:checked="showFigures"
+              />
               <Label for="show-figures" class="leading-5">Show original figures on game boards (if available)<br><span class="text-gray-400">If turned off, a numeric representation will be shown.</span></Label>
 
               <Switch
@@ -117,6 +120,12 @@
                 :disabled="runtimeConfig.public.calculateInBrowserOnly"
               />
               <Label for="calculate-in-browser" class="leading-5">Calculate in-browser (experimental)<br><span class="text-gray-400">This will run the calculation in your browser instead of in the Bun-powered server.</span></Label>
+
+              <Switch
+                id="prepare-possible-solution-starts"
+                v-model:checked="preparePossibleSolutionStarts"
+              />
+              <Label for="prepare-possible-solution-starts" class="leading-5">Prepare possible solution starts<br><span class="text-gray-400">When enabled, we won't just brute force the puzzle, but prepare some possible solution starts based on correct corner outputs.</span></Label>
             </div>
           </div>
 
@@ -284,6 +293,7 @@ const isPrinting = shallowRef(false);
 
 const showFigures = useLocalStorage('showFigures', true);
 const calculateInBrowser = useLocalStorage('calculateInBrowser', runtimeConfig.public.calculateInBrowserOnly);
+const preparePossibleSolutionStarts = useLocalStorage('preparePossibleSolutionStarts', false);
 
 const puzzleOptions = shallowRef<PuzzleOptions>();
 const puzzleOptionsStringified = usePuzzleOptionsStringified(puzzleOptions);
@@ -380,7 +390,13 @@ async function calculate (inputType: InputType, payload?: PuzzleOptions) {
           reject(event);
         };
 
-        shapeshifterWorker.postMessage(payload ?? PuzzleLibrary.level30);
+        shapeshifterWorker.postMessage({
+          event: 'calculate',
+          payload: payload ?? PuzzleLibrary.level10,
+          settings: {
+            preparePossibleSolutionStarts: preparePossibleSolutionStarts.value,
+          },
+        });
       });
     }
     catch (err) {
