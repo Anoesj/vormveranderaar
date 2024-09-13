@@ -1,7 +1,7 @@
 <template>
   <div class="flex flex-col gap-6 py-8">
     <div class="wrapper flex flex-wrap gap-4">
-      <Card class="grow shrink-0 basis-[400px] bg-[#f8fafc]">
+      <Card class="grow shrink-0 basis-[min(400px,100%-4rem)] bg-[#f8fafc]">
         <CardHeader>
           <CardTitle>Input</CardTitle>
         </CardHeader>
@@ -79,7 +79,7 @@
         </CardFooter>
       </Card>
 
-      <Card class="grow shrink-0 basis-[400px] bg-[#f8fafc] flex flex-col">
+      <Card class="grow shrink-0 basis-[min(400px,100%-4rem)] bg-[#f8fafc] flex flex-col">
         <CardHeader>
           <CardTitle>Formatted</CardTitle>
         </CardHeader>
@@ -159,7 +159,7 @@
           }"
         >
           <div class="flex gap-8 flex-wrap">
-            <div class="grow shrink-0 basis-[400px]">
+            <div class="grow shrink-0 basis-[min(400px,100%-4rem)]">
               <h2>Info</h2>
               <p>{{ result.solutions.length > 0 ? '✅' : '❌' }} <strong>{{ result.solutions.length > 0 ? `${result.solutions.length} solution${result.solutions.length > 1 ? 's' : ''} found` : 'no solution found' }}</strong></p>
               <p>ℹ️ <strong>{{ result.meta.returningMaxOneSolution ? 'Maximum of one solution returned for better performance' : 'Looked for all possible solutions' }}</strong></p>
@@ -173,7 +173,7 @@
               <p><strong>{{ numberFormatter.format(result.meta.skippedDuplicateSituations) }}</strong> combinations skipped due to duplicate situations</p>
               <p><strong>{{ numberFormatter.format(result.meta.skippedImpossibleSituations) }}</strong> combinations skipped due to impossible situations</p>
             </div>
-            <div class="grow shrink-0 basis-[400px] overflow-x-auto">
+            <div class="grow shrink-0 basis-[min(400px,100%-4rem)] overflow-x-auto">
               <h2>Game board</h2>
               <div class="f flex-wrap gap-y-4 mt-4">
                 <div>
