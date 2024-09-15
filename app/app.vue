@@ -182,13 +182,30 @@
                 </div>
                 <div>
                   <div>&nbsp;</div>
-                  ➡️
+                  <ArrowRight/>
                 </div>
                 <div>
                   <div>Goal</div>
                   <Grid :grid="result.gameBoard" :replaceAllWith="result.targetFigure.value" />
                 </div>
               </div>
+
+              <template v-if="figuresNamesAreUrls">
+                <h2>Symbols</h2>
+                <div class="f flex-wrap gap-y-4 mt-4">
+                  <template
+                    v-for="(figure, index) in result.figures"
+                    :key="figure.name"
+                  >
+                    <img
+                      :src="(figure.name as string)"
+                      alt=""
+                      class="w-8 h-8"
+                    >
+                    <template v-if="index !== result.figures.length - 1"> <ArrowRight/> </template>
+                  </template>
+                </div>
+              </template>
             </div>
           </div>
 
@@ -267,6 +284,7 @@
 <script setup lang="ts">
 import { useLocalStorage } from '@vueuse/core';
 import {
+  ArrowRight,
   BadgeCheck,
   Calculator,
   CircleDashed,
@@ -298,7 +316,13 @@ const preparePossibleSolutionStarts = useLocalStorage('preparePossibleSolutionSt
 const puzzleOptions = shallowRef<PuzzleOptions>();
 const puzzleOptionsStringified = usePuzzleOptionsStringified(puzzleOptions);
 
+const figuresNamesAreUrls = computed(() => result.value?.figures
+  .every(figure => typeof figure.name === 'string' && figure.name.startsWith('http')) ?? false);
+
+const doShowFigures = computed(() => showFigures.value && figuresNamesAreUrls.value);
+
 provide(showFiguresKey, showFigures);
+provide(doShowFiguresKey, doShowFigures);
 provide(resultKey, result);
 provide(isPrintingKey, isPrinting);
 

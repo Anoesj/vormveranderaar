@@ -17,10 +17,10 @@
             'puzzle-piece-active-cell': isPuzzlePieceGrid && colVal,
             [`figure--${colVal}`]: !isPuzzlePieceGrid && !doShowFigures,
           },
-          `${!doShowFigures ? 'border-foreground border' : ''} leading-none relative text-center`,
+          `${doShowFigures && !isPuzzlePieceGrid ? 'border-transparent' : 'border-foreground'} border leading-none relative text-center`,
         ]"
       >
-        <div class="w-9 h-9 flex items-center justify-center">
+        <div class="w-8 h-8 flex items-center justify-center">
           <slot :value="colVal">
             <img
               v-if="!isPuzzlePieceGrid && doShowFigures"
@@ -48,13 +48,8 @@ const {
   replaceAllWith?: unknown;
 }>();
 
-const showFigures = inject(showFiguresKey)!;
 const result = inject(resultKey)!;
-
-const figuresNamesAreUrls = computed(() => result.value!.figures
-  .every(figure => typeof figure.name === 'string' && figure.name.startsWith('http')));
-
-const doShowFigures = computed(() => showFigures.value && figuresNamesAreUrls.value);
+const doShowFigures = inject(doShowFiguresKey)!;
 
 function imgSrc (value: number) {
   return result.value!.figures[value]!.name as string;

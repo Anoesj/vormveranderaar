@@ -24,13 +24,13 @@
         v-for="part of possibleSolutionStart.parts"
         :key="part.id"
       >
-        <h5>{{ part.id }}</h5>
+        <h5>{{ part.id }} at (x: {{ part.position.x }}, y: {{ part.position.y }})</h5>
 
         <div class="f">
           <Grid :grid="part.before!" />
-          ➕
+          <Plus/>
           <Grid :grid="part.grid" isPuzzlePieceGrid />
-          🟰
+          <Equal/>
           <Grid :grid="part.after!" />
           <span
             v-if="part.after!.isSolution !== undefined"
@@ -45,6 +45,7 @@
 
 <script setup lang="ts">
 import type { PossibleSolution } from '#build/types/nitro-imports';
+import { Plus, Equal } from 'lucide-vue-next';
 
 const {
   possibleSolutionStart,

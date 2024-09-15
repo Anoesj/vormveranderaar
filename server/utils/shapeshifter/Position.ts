@@ -10,24 +10,16 @@ export class Position {
    */
   static #constructorKey = Symbol();
 
-  #x: number;
-  #y: number;
+  x: number;
+  y: number;
 
   constructor (x: number, y: number, constructorKey: symbol) {
     if (constructorKey !== Position.#constructorKey) {
       throw new Error('Position cannot be instantiated directly. Use Position.get() instead.');
     }
 
-    this.#x = x;
-    this.#y = y;
-  }
-
-  get x () {
-    return this.#x;
-  }
-
-  get y () {
-    return this.#y;
+    this.x = x;
+    this.y = y;
   }
 
   static get (x: number, y: number): Position {
@@ -47,7 +39,7 @@ export class Position {
   }
 
   toString () {
-    return Position.toString(this.#x, this.#y);
+    return Position.toString(this.x, this.y);
   }
 
   toJSON () {
