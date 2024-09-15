@@ -482,8 +482,6 @@ useHead({
 </script>
 
 <style lang="scss">
-@import '@/assets/css/tailwind.css';
-
 html {
   --easing-cubic: cubic-bezier(0.4, 0, 0.2, 1);
   font-family: "Urbanist", sans-serif;
@@ -491,16 +489,16 @@ html {
   font-size: 20px;
   font-weight: 500;
   line-height: 1.8;
-
+  // background-color: hsl(37.82deg 95.8% 53.1% / 9%);
   background-image:
-    radial-gradient(circle at center, #0000, Canvas),
+    radial-gradient(circle at center, transparent, white),
     radial-gradient(
       circle at 1px 1px,
       hsl(var(--primary)) 1px,
       #0000 0
     );
-  background-size: 200px 200px, 20px 20px;
-  background-repeat: repeat;
+  background-size: 400px 400px, 18px 18px;
+  background-repeat: round, space;
 }
 
 body {
