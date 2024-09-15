@@ -1537,7 +1537,7 @@ export const PuzzleLibrary = {
   },
 
   level31: {
-    figures: ['cro_0', 'swo_0'],
+    figures: ['https://images.neopets.com/medieval/shapeshifter/cro_0.gif', 'https://images.neopets.com/medieval/shapeshifter/swo_0.gif'],
     gameBoard: [
       [0, 0, 1, 0, 0, 1],
       [1, 0, 0, 1, 1, 1],
@@ -1613,7 +1613,7 @@ export const PuzzleLibrary = {
   },
 
   level32: {
-    figures: ['hel_0', 'swo_0'],
+    figures: ['https://images.neopets.com/medieval/shapeshifter/hel_0.gif', 'https://images.neopets.com/medieval/shapeshifter/swo_0.gif'],
     gameBoard: [
       [1, 0, 0, 0, 0, 0],
       [1, 1, 0, 1, 0, 1],
@@ -1692,7 +1692,7 @@ export const PuzzleLibrary = {
   },
 
   level33: {
-    figures: ['hel_0', 'swo_0'],
+    figures: ['https://images.neopets.com/medieval/shapeshifter/hel_0.gif', 'https://images.neopets.com/medieval/shapeshifter/swo_0.gif'],
     gameBoard: [
       [0, 1, 0, 1, 0, 1],
       [0, 1, 0, 0, 0, 0],
@@ -1776,7 +1776,7 @@ export const PuzzleLibrary = {
   },
 
   level34: {
-    figures: ['cro_0', 'swo_0'],
+    figures: ['https://images.neopets.com/medieval/shapeshifter/cro_0.gif', 'https://images.neopets.com/medieval/shapeshifter/swo_0.gif'],
     gameBoard: [
       [0, 1, 1, 1, 1, 0],
       [1, 1, 0, 0, 1, 1],
@@ -1849,7 +1849,7 @@ export const PuzzleLibrary = {
   },
 
   level35: {
-    figures: ['gau_0', 'swo_0'],
+    figures: ['https://images.neopets.com/medieval/shapeshifter/gau_0.gif', 'https://images.neopets.com/medieval/shapeshifter/swo_0.gif'],
     gameBoard: [
       [1, 1, 1, 1, 1, 1],
       [1, 0, 1, 1, 1, 0],
