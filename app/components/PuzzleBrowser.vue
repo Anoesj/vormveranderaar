@@ -44,11 +44,19 @@
 </template>
 
 <script lang="ts" setup>
+import { useLocalStorage } from '@vueuse/core';
 import { Calculator } from 'lucide-vue-next';
 
 defineEmits<{
   submit: [payload: PuzzleOptions];
 }>();
 
-const selectedPuzzle = shallowRef<keyof typeof SelectablePuzzleLibrary>(keys(SelectablePuzzleLibrary)[0]!);
+const selectablePuzzleIds = keys(SelectablePuzzleLibrary);
+const defaultSelectedPuzzle = selectablePuzzleIds[0]!;
+
+const selectedPuzzle = useLocalStorage<typeof selectablePuzzleIds[number]>('puzzleBrowserSelectedPuzzle', defaultSelectedPuzzle);
+
+if (!selectablePuzzleIds.includes(selectedPuzzle.value)) {
+  selectedPuzzle.value = defaultSelectedPuzzle;
+}
 </script>
