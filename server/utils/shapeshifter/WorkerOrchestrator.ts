@@ -9,7 +9,7 @@ export class WorkerOrchestrator {
 
   // NOTE: Temporarily 1, until we find a way to distribute the work between workers.
   maxWorkers = 1;
-  // maxWorkers = window.navigator.hardwareConcurrency || 1;
+  // maxWorkers = globalThis.navigator.hardwareConcurrency || 1;
 
   start () {
     for (let i = 0; i < this.maxWorkers; i++) {
