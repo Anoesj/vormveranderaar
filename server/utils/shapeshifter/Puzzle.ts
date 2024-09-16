@@ -76,6 +76,8 @@ export class Puzzle {
     maxMemoryUsed: number;
     reachedMaxMemory?: boolean;
     calculationDuration: number;
+    throughput: number;
+    percentageOfPossibleCombinationsTried: number;
   } = {
     totalNumberOfPossibleCombinations: 0,
     totalNumberOfTriedCombinations: 0,
@@ -86,6 +88,8 @@ export class Puzzle {
     maxMemoryUsed: 0,
     reachedMaxMemory: false,
     calculationDuration: 0,
+    throughput: 0,
+    percentageOfPossibleCombinationsTried: 0,
   };
 
   #timings: {
@@ -687,7 +691,7 @@ export class Puzzle {
   #finalize () {
     this.#timings.tBruteForceEnd = performance.now();
 
-    this.#saveCalculationDuration();
+    this.#saveAdditionalMeta();
     console.log('\n-----------------------------------');
     console.log('Total number of tried combinations:', numberFormatter.format(this.meta.totalNumberOfTriedCombinations));
     console.log('Total number of iterator placement attempts:', numberFormatter.format(this.meta.totalNumberOfIteratorPlacementAttempts));
@@ -992,8 +996,10 @@ export class Puzzle {
   //   // Bun.gc(false);
   // }
 
-  #saveCalculationDuration () {
+  #saveAdditionalMeta () {
     this.#timings.tEnd = performance.now();
     this.meta.calculationDuration = this.#timings.tEnd - this.#timings.tStart;
+    this.meta.percentageOfPossibleCombinationsTried = this.meta.skippedImpossibleSituations / this.meta.totalNumberOfPossibleCombinations * 100;
+    this.meta.throughput = Math.round(this.meta.skippedImpossibleSituations / (this.meta.calculationDuration / 1000));
   }
 }

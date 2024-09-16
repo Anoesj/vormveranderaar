@@ -175,6 +175,16 @@
               <p><strong>{{ numberFormatter.format(result.meta.totalNumberOfTriedCombinations) }}</strong> probable solutions validated</p>
               <p><strong>{{ numberFormatter.format(result.meta.skippedDuplicateSituations) }}</strong> combinations skipped due to duplicate situations</p>
               <p><strong>{{ numberFormatter.format(result.meta.skippedImpossibleSituations) }}</strong> combinations skipped due to impossible situations</p>
+              <p><strong>{{
+                result.meta.percentageOfPossibleCombinationsTried < 0.01 ? '< 0.01' : numberFormatter.format(result.meta.percentageOfPossibleCombinationsTried)
+              }}%</strong> of all possible combinations tried until solution was found{{
+                result.meta.percentageOfPossibleCombinationsTried < 1
+                  ? ' 🍀'
+                  : (result.meta.percentageOfPossibleCombinationsTried > 85 && result.meta.calculationDuration > 60_000 * 2)
+                    ? ' 🤕'
+                    : ''
+              }}</p>
+              <p>Throughput: <strong>{{ numberFormatter.format(result.meta.throughput) }} Hz</strong> (combinations per second)</p>
             </div>
             <div class="grow shrink-0 basis-[min(400px,100%-4rem)] overflow-x-auto">
               <h2>Game board</h2>
