@@ -120,8 +120,6 @@ export class Puzzle {
     getNextPuzzlePiecesMaxInfluencedCells: new PerfStat,
   };
 
-  #loggingDisabled = false;
-
   constructor (options: {
     figures: Array<string | number>;
     gameBoard: GridLike<number>;
@@ -189,6 +187,32 @@ export class Puzzle {
   async preparePossibleSolutionStarts () {
     this.#timings.tPrepareSolutionStartsStart = performance.now();
 
+    const logQueue: Array<unknown[]> = [];
+
+    let lastFlushedLogQueue = performance.now();
+
+    const addToLogQueue = (...log: unknown[]) => {
+      logQueue.push(log);
+      maybeFlushLogQueue();
+    }
+
+    function flushLogQueue () {
+      const logQueueLength = logQueue.length;
+
+      for (let i = 0; i < logQueueLength; i++) {
+        console.log(...logQueue[i]!);
+      }
+
+      logQueue.length = 0;
+      lastFlushedLogQueue = performance.now();
+    }
+
+    const maybeFlushLogQueue = () => {
+      if (performance.now() - lastFlushedLogQueue > 5000) {
+        flushLogQueue();
+      }
+    }
+
     /*
       Some notes:
       - We also include the possibility of a corner piece not being placed in a corner at all with this logic.
@@ -255,18 +279,12 @@ export class Puzzle {
     }
 
     for (const topLeft of this.cornersInfo!.topLeft.possiblePuzzlePieceCombinations!) {
-      // if (await this.#checkRequestIsCanceled()) return;
-
       for (const topRight of this.cornersInfo!.topRight.possiblePuzzlePieceCombinations!) {
-        // if (await this.#checkRequestIsCanceled()) return;
-
         if (!compatible({ topLeft, topRight })) {
           continue;
         }
 
         for (const bottomLeft of this.cornersInfo!.bottomLeft.possiblePuzzlePieceCombinations!) {
-          // if (await this.#checkRequestIsCanceled()) return;
-
           if (
             !compatible({ topLeft, bottomLeft })
             || !compatible({ topRight, bottomLeft })
@@ -275,19 +293,12 @@ export class Puzzle {
           }
 
           for (const bottomRight of this.cornersInfo!.bottomRight.possiblePuzzlePieceCombinations!) {
-            // if (await this.#checkRequestIsCanceled()) return;
-
             if (
               !compatible({ topLeft, bottomRight })
               || !compatible({ topRight, bottomRight })
               || !compatible({ bottomLeft, bottomRight })
             ) {
               continue;
-            }
-
-            if (this.possibleSolutionStarts.length === 500) {
-              console.log('Disabling logging possible solution starts, because there are too many of them.');
-              this.#loggingDisabled = true;
             }
 
             const combination = {
@@ -325,10 +336,10 @@ export class Puzzle {
               });
 
             if (!affectedCountsCompatible) {
-              this.#maybeLog(() => console.log(
-                'Discarded possible solution start, because not all corners are affected by the puzzle pieces the right number of times:',
-                affectedCounts,
-              ));
+              // addToLogQueue(
+              //   'Discarded possible solution start, because not all corners are affected by the puzzle pieces the right number of times:',
+              //   affectedCounts,
+              // );
 
               continue;
             }
@@ -351,12 +362,9 @@ export class Puzzle {
             }
 
             if (missingRequiredPuzzlePieces.length) {
-              // this.#maybeLog(
-              //   () => console.log(
-              //     'Discarded possible solution start, because not all puzzle pieces that affect corners are used in the corners:',
-              //     missingRequiredPuzzlePieces,
-              //   ),
-              //   // () => console.log('Discarded possible solution start, because not all puzzle pieces that affect corners are used in the corners'),
+              // addToLogQueue(
+              //   'Discarded possible solution start, because not all puzzle pieces that affect corners are used in the corners:',
+              //   missingRequiredPuzzlePieces,
               // );
 
               continue;
@@ -364,8 +372,9 @@ export class Puzzle {
 
             possibleSolutionStart.sortAlphabetically();
 
+            // TODO: Also discard if all of the puzzle pieces' shapes equal those of another possible solution start.
             if (this.possibleSolutionStarts.find((other) => possibleSolutionStart.equals(other))) {
-              console.log('Discarded possible solution start (duplicate)');
+              // addToLogQueue('Discarded possible solution start (duplicate)');
               continue;
             }
 
@@ -379,18 +388,13 @@ export class Puzzle {
 
             this.possibleSolutionStarts.push(possibleSolutionStart);
 
-            // Fallback log so we do see something, but it doesn't really affect performance.
-            console.log(`\nAdded new possible solution start (#${this.possibleSolutionStarts.length})`);
-            // this.#maybeLog(
-            //   () => console.log(`\nAdded new possible solution start (#${this.possibleSolutionStarts.length})`),
-            //   () => console.log('Added new possible solution start'),
-            // );
-
-            // this.#maybeLog(() => console.log(possibleSolutionStart.toString()));
+            addToLogQueue(`Added new possible solution start (#${this.possibleSolutionStarts.length})`);
           }
         }
       }
     }
+
+    flushLogQueue();
 
     const puzzlePieces = Object.values(this.puzzlePieces);
     for (const possibleSolutionStart of this.possibleSolutionStarts) {
@@ -419,7 +423,7 @@ export class Puzzle {
     this.#hasPreparedSolutionStarts = true;
     this.#timings.tPrepareSolutionStartsEnd = performance.now();
 
-    console.log(`\nPrepared ${this.possibleSolutionStarts.length} possible solution starts.`);
+    console.log(`Prepared ${this.possibleSolutionStarts.length} possible solution starts.`);
     this.#logTimeToPrepareSolutionStarts();
   }
 
@@ -463,7 +467,7 @@ export class Puzzle {
       } = possibleSolutionStart.getContinuationInfo(puzzlePieces, this.#hasPreparedSolutionStarts);
 
       console.log(`\nBrute forcing from possible solution start #${i + 1}/${possibleSolutionStartsCount} (${numberFormatter.format(unusedPuzzlePiecesPossibleCombinations)} possible combinations)`);
-      this.#maybeLog(() => console.log('Unused puzzle pieces:', unusedPuzzlePiecesCount === 0 ? '-' : `${unusedPuzzlePiecesCount} (${unusedPuzzlePiecesPlacementOptions.map(p => p.puzzlePiece.id).join(', ')})`));
+      console.log('Unused puzzle pieces:', unusedPuzzlePiecesCount === 0 ? '-' : `${unusedPuzzlePiecesCount} (${unusedPuzzlePiecesPlacementOptions.map(p => p.puzzlePiece.id).join(', ')})`);
 
       // If possible solution consist of no possible solution parts,
       // the solution is: do nothing. In that case, the grid after all changes
@@ -471,10 +475,10 @@ export class Puzzle {
       const gameBoardSoFar = possibleSolutionStart.finalGameBoard ?? this.gameBoard;
       gameBoardSoFar.checkIsSolution(this.targetFigure);
 
-      this.#maybeLog(() => console.log('Game board so far:', gameBoardSoFar.toString()));
+      console.log('Game board so far:', gameBoardSoFar.toString());
 
       if (!unusedPuzzlePiecesCount) {
-        this.#maybeLog(() => console.log('No unused puzzle pieces, checking if we reached a solution already'));
+        console.log('No unused puzzle pieces, checking if we reached a solution already');
 
         if (gameBoardSoFar.isSolution) {
           possibleSolutionStart.logSolution();
@@ -489,7 +493,7 @@ export class Puzzle {
           continue;
         }
 
-        this.#maybeLog(() => console.log('No solutions found for this possible solution start'));
+        console.log('No solutions found for this possible solution start');
         continue;
       }
 
@@ -498,7 +502,7 @@ export class Puzzle {
       const shouldAbort = this.#calculatedSameSituationBefore(unusedPuzzlePiecesPlacementOptions.map(p => p.puzzlePiece), gameBoard);
 
       if (shouldAbort) {
-        this.#maybeLog(() => console.log(`Had the same grid with the same unused puzzle pieces before, skipping this entire possible solution start.`));
+        console.log(`Had the same grid with the same unused puzzle pieces before, skipping this entire possible solution start.`);
         this.meta.skippedDuplicateSituations += unusedPuzzlePiecesPossibleCombinations;
         continue;
       }
@@ -646,7 +650,7 @@ export class Puzzle {
         // If at any level before that, we skip all impossible situations.
         let skipped = 1;
         for (let i = 0; i < puzzlePiecesLeft; i++) {
-          skipped *= next[i]!.puzzlePiece.getPossiblePositions(this.#hasPreparedSolutionStarts).length;
+          skipped *= next[i]!.possiblePositions.length;
         }
 
         this.meta.skippedImpossibleSituations += skipped;
@@ -944,15 +948,6 @@ export class Puzzle {
     console.log('Total skipped duplicate situations so far:', numberFormatter.format(totalSkippedDuplicateSituations));
     console.log('Total skipped impossible situations so far:', numberFormatter.format(totalSkippedImpossibleSituations));
     // this.#lastSkippedDuplicateSituations = totalSkippedDuplicateSituations;
-  }
-
-  #maybeLog (logger: () => unknown, fallbackLogger?: () => unknown) {
-    if (this.#loggingDisabled) {
-      if (fallbackLogger) fallbackLogger();
-      return;
-    }
-
-    logger();
   }
 
   /**
