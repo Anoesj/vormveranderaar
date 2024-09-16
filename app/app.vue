@@ -19,8 +19,8 @@
           <Button
             v-else
             variant="destructive"
-            @click="cancel"
             class="w-full gap-1"
+            @click="cancel()"
           >
             <X/>
             Cancel
@@ -44,8 +44,8 @@
           <Button
             v-else
             variant="destructive"
-            @click="cancel"
             class="w-full gap-1"
+            @click="cancel()"
           >
             <X/>
             Cancel
@@ -57,7 +57,7 @@
         </CardContent>
 
         <CardFooter>
-          <PuzzleBrowser @submit="calculate('example', $event)">
+          <PuzzleBrowser @submit="puzzleOptions = $event; calculate('example', $event)">
             <template #trigger>
               <Button
                 v-if="pending !== 'example'"
@@ -72,7 +72,7 @@
                 v-else
                 variant="destructive"
                 class="w-full gap-1"
-                @click.prevent="cancel()"
+                @click.prevent.capture="cancel()"
               >
                 <X/>
                 Cancel
@@ -199,7 +199,7 @@
                 </div>
                 <div>
                   <div>Goal</div>
-                  <Grid :grid="result.gameBoard" :replaceAllWith="result.targetFigure.value" />
+                  <Grid :grid="result.gameBoard" :replaceAllWith="result.targetFigure" />
                 </div>
               </div>
 
@@ -463,6 +463,7 @@ async function calculate (inputType: InputType, payload: PuzzleOptions) {
 }
 
 function cancel() {
+  console.log('Canceling calculation');
   controller?.abort('User canceled');
 }
 
