@@ -308,7 +308,7 @@ import {
   Settings,
   X,
 } from 'lucide-vue-next';
-import ShapeshifterWorker from '@/utils/shapeshifter-worker?worker';
+import ShapeshifterWorker from '@/utils/shapeshifterWorker?worker';
 
 const runtimeConfig = useRuntimeConfig();
 

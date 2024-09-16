@@ -423,6 +423,7 @@ export class Puzzle {
     this.#logTimeToPrepareSolutionStarts();
   }
 
+  // TODO: Divide work into smaller chunks and let WorkerOrchestrator spin up multiple workers to do the work.
   async bruteForceSolution ({
     possibleSolutionStarts = this.possibleSolutionStarts,
     from = 0,
