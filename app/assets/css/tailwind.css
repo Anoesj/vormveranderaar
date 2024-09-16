@@ -15,9 +15,11 @@
     --popover-foreground: 20 14.3% 4.1%;
 
     --primary: 47.9 95.8% 53.1%;
+    --primary-dark: 47.9 95.8% 48%;
     --primary-foreground: 26 83.3% 14.1%;
 
     --secondary: 190 15.8% 90.9%;
+    --secondary-dark: 190 15.8% 85%;
     --secondary-foreground: 24 9.8% 10%;
 
     --muted: 60 4.8% 95.9%;
@@ -27,6 +29,7 @@
     --accent-foreground: 24 9.8% 10%;
 
     --destructive: 0 84.2% 60.2%;
+    --destructive-dark: 0 84.2% 55%;
     --destructive-foreground: 60 9.1% 97.8%;
 
     --border:20 5.9% 90%;
