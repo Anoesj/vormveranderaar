@@ -41,7 +41,7 @@ const numberFormatter = new Intl.NumberFormat('nl-NL', {
 export class Puzzle {
   figures: Figure[];
   figuresCount: number;
-  targetFigure: Figure;
+  targetFigure: Figure['value'];
 
   gameBoard: GameBoard;
   gameBoardCompleted: GameBoard;
@@ -135,10 +135,10 @@ export class Puzzle {
 
     this.figuresCount = this.figures.length;
 
-    this.targetFigure = this.figures.at(-1)!;
+    this.targetFigure = this.figures.at(-1)!.value;
 
     this.gameBoard = new GameBoard(options.gameBoard);
-    this.gameBoardCompleted = new GameBoard(options.gameBoard.map(row => row.map(_ => this.targetFigure.value)));
+    this.gameBoardCompleted = new GameBoard(options.gameBoard.map(row => row.map(_ => this.targetFigure)));
     this.gameBoardCompletedSum = this.gameBoardCompleted.sum();
 
     for (const [i, puzzlePieceGrid] of options.puzzlePieces.entries()) {
@@ -333,7 +333,7 @@ export class Puzzle {
               continue;
             }
 
-            const possibleSolutionStart = new PossibleSolution(this.targetFigure.value);
+            const possibleSolutionStart = new PossibleSolution(this.targetFigure);
 
             let missingRequiredPuzzlePieces = [...this.puzzlePiecesThatCannotAvoidAnyCorners];
 
@@ -438,7 +438,7 @@ export class Puzzle {
     // This allows us to skip preparing the possible solution starts
     // if that's more feasible performance-wise.
     if (!this.#hasPreparedSolutionStarts) {
-      const blankSolutionStart = new PossibleSolution(this.targetFigure.value)
+      const blankSolutionStart = new PossibleSolution(this.targetFigure)
       blankSolutionStart.solutionStartIndex = 0;
       this.possibleSolutionStarts.push(blankSolutionStart);
     }
@@ -469,7 +469,7 @@ export class Puzzle {
       // the solution is: do nothing. In that case, the grid after all changes
       // is the original game board.
       const gameBoardSoFar = possibleSolutionStart.finalGameBoard ?? this.gameBoard;
-      gameBoardSoFar.checkIsSolution(this.targetFigure.value);
+      gameBoardSoFar.checkIsSolution(this.targetFigure);
 
       this.#maybeLog(() => console.log('Game board so far:', gameBoardSoFar.toString()));
 
@@ -552,8 +552,37 @@ export class Puzzle {
     current: PuzzlePiecePlacementOptions;
     next: PuzzlePiecePlacementOptions[];
   }): Generator<PossibleSolution> {
-    const { puzzlePiece, possiblePositions } = current;
+    const {
+      puzzlePiece,
+      possiblePositions,
+    } = current;
+
+    const puzzlePiecesLeft = next.length;
+    const newCurrent = next[0];
+    const newNext = next.slice(1);
+
     const possiblePositionCount = possiblePositions.length;
+
+    // eslint-disable-next-line prefer-const
+    let possiblePositionsSorted = possiblePositions;
+
+    /*
+      NOTE:
+      This only affects so few situations, that in the end, the calculations
+      slow down the brute force anyway.
+    */
+    // Sort possible positions by distance to focus area.
+    // if (puzzlePiecesLeft <= 3) {
+    //   const { focusArea } = gameBoard.analyze(this.targetFigure);
+
+    //   const { cols, rows } = current.puzzlePiece.grid;
+
+    //   possiblePositionsSorted = possiblePositions.toSorted((a, b) => {
+    //     const aDistance = this.#distanceToFocusArea(focusArea, a, cols, rows);
+    //     const bDistance = this.#distanceToFocusArea(focusArea, b, cols, rows);
+    //     return aDistance - bDistance;
+    //   });
+    // }
 
     for (let i = 0; i < possiblePositionCount; i++) {
       this.meta.totalNumberOfIteratorPlacementAttempts++;
@@ -586,7 +615,7 @@ export class Puzzle {
       }
 
       // const p0 = performance.now();
-      const position = possiblePositions[i]!;
+      const position = possiblePositionsSorted[i]!;
       const grid = puzzlePiece.toEmptyGameBoardWithPuzzlePieceAt(position);
       // const p1 = performance.now();
       const before = gameBoard.clone();
@@ -599,8 +628,6 @@ export class Puzzle {
       // this.#perf.toEmptyGameBoardWithPuzzlePieceAt.push(p1 - p0);
       // this.#perf.gameBoardClone.push(p2 - p1);
       // this.#perf.gameBoardStack.push(p3 - p2);
-
-      const puzzlePiecesLeft = next.length;
 
       // const p4 = performance.now();
       const numberOfTransformsNeeded = this.gameBoardCompletedSum - after.sum();
@@ -645,9 +672,6 @@ export class Puzzle {
       // level's result and continue with the next possible position of
       // the current puzzle piece.
       if (puzzlePiecesLeft) {
-        const newCurrent = next[0];
-        const newNext = next.slice(1);
-
         // Let another iterator yield for us. This "iterator recursion"
         // will be repeated until we reach the final level.
         yield* this.#puzzlePiecePlacementOptionsIterator({
@@ -665,6 +689,35 @@ export class Puzzle {
       // Only on the final level, yield the result up all the way to the top.
       yield result;
     }
+  }
+
+  #distanceToFocusArea (
+    focusArea: {
+      x1: number;
+      x2: number;
+      y1: number;
+      y2: number;
+    },
+    position: Position,
+    puzzlePieceCols: number,
+    puzzlePieceRows: number,
+  ): number {
+    const x1 = position.x;
+    const x2 = x1 + puzzlePieceCols;
+    const y1 = position.y;
+    const y2 = y1 + puzzlePieceRows;
+
+    const xDistance = Math.min(
+      Math.abs(x1 - focusArea.x1),
+      Math.abs(x2 - focusArea.x2),
+    );
+
+    const yDistance = Math.min(
+      Math.abs(y1 - focusArea.y1),
+      Math.abs(y2 - focusArea.y2),
+    );
+
+    return xDistance + yDistance;
   }
 
   /**
@@ -729,7 +782,7 @@ export class Puzzle {
 
   #createCornerInfo (corner: number) {
     const originalValue = corner;
-    const targetValue = this.targetFigure.value;
+    const targetValue = this.targetFigure;
 
     const cornerInfo: CornerInfo = {
       originalValue,

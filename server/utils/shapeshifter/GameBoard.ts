@@ -82,6 +82,73 @@ export class GameBoard extends Grid {
     return sum;
   }
 
+  analyze (targetValue: Figure['value']) {
+    const invalidCellsArea = {
+      x1: 0 as number | null,
+      x2: this.cols - 1 as number | null,
+      y1: null as number | null,
+      y2: null as number | null,
+    };
+
+    const {
+      data,
+      cols,
+      rows,
+    } = this;
+
+    for (let rowIndex = 0; rowIndex < rows; rowIndex++) {
+      for (let colIndex = 0; colIndex < cols; colIndex++) {
+        if (data[rowIndex]![colIndex]! !== targetValue) {
+          // First encountered y = y1
+          if (invalidCellsArea.y1 === null) {
+            invalidCellsArea.y1 = rowIndex;
+          }
+
+          // Always update, because last encountered y = y2
+          invalidCellsArea.y2 = rowIndex;
+
+          // Lowest encountered x = x1
+          invalidCellsArea.x1 = invalidCellsArea.x1 === null
+            ? colIndex
+            : Math.min(invalidCellsArea.x1, colIndex);
+
+          // Highest encountered x = x2
+          invalidCellsArea.x2 = invalidCellsArea.x2 === null
+            ? colIndex
+            : Math.max(invalidCellsArea.x2, colIndex);
+        }
+      }
+    }
+
+    /*
+      TODO:
+      - Either: find the area of the board that still contains incorrect cells.
+      - Or: find adjacent cells with the same incorrect value.
+      - Check if we're already at the solution. If so, we want to check how we
+        can stack the next puzzle pieces in such a way, that they have no effect
+        on the board.
+
+      NOTE:
+      - As a first step, we can just try to sort the possiblePositions by the amount
+        of cells that would be transformed (we need to do an analysis of the
+        positions of incorrect cells vs. the shape of the puzzle piece).
+        See if this can be done in a more performant way than just stacking the before grid
+        and the puzzle piece in several positions. That would go against the idea of the iterator.
+      - When we know what cells are incorrect, we may be able to find out how many
+        cells the puzzle piece should transform at minimum and exclude positions
+        for that puzzle piece that would transform too little cells.
+    */
+
+    return {
+      focusArea: invalidCellsArea as {
+        x1: number,
+        x2: number,
+        y1: number,
+        y2: number
+      },
+    };
+  }
+
   checkIsSolution (targetValue: Figure['value']) {
     this.isSolution = this.everyValueIs(targetValue);
     return this.isSolution;
