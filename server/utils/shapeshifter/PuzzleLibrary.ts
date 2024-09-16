@@ -254,7 +254,7 @@ export const PuzzleLibrary = {
 
   // ✅ Works
   p18: {
-    hide: false,
+    hide: true,
     figures: [0, 1],
     gameBoard: [
       [1, 0, 0, 1, 0, 1],
