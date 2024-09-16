@@ -1,22 +1,27 @@
 onmessage = async (event: MessageEvent<{
-  event: 'calculate';
+  type: 'calculate';
   payload: PuzzleOptions;
   settings: {
     preparePossibleSolutionStarts: boolean;
   };
 }>) => {
-  console.log('Web Worker about to calculate the following situation:', event.data);
+  if (event.data.type === 'calculate') {
+    console.log('Web Worker about to calculate the following situation:', event.data.payload);
 
-  const puzzle = new Puzzle(event.data.payload);
+    const puzzle = new Puzzle(event.data.payload);
 
-  if (event.data.settings.preparePossibleSolutionStarts) {
-    await puzzle.preparePossibleSolutionStarts();
+    if (event.data.settings.preparePossibleSolutionStarts) {
+      await puzzle.preparePossibleSolutionStarts();
+    }
+
+    await puzzle.bruteForceSolution();
+
+    postMessage({
+      type: 'finished',
+      payload: puzzle,
+    });
   }
-
-  await puzzle.bruteForceSolution();
-
-  postMessage({
-    event: 'finished',
-    payload: puzzle,
-  });
+  else {
+    throw new TypeError('Unknown message event type');
+  }
 };

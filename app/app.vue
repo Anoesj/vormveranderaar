@@ -326,7 +326,7 @@ const status = ref<string>();
 const isPrinting = shallowRef(false);
 
 const showFigures = useLocalStorage('showFigures', true);
-const calculateInBrowser = useLocalStorage('calculateInBrowser', runtimeConfig.public.calculateInBrowserOnly);
+const calculateInBrowser = useLocalStorage('calculateInBrowser', true);
 const preparePossibleSolutionStarts = useLocalStorage('preparePossibleSolutionStarts', false);
 
 const puzzleOptions = shallowRef<PuzzleOptions>();
@@ -383,15 +383,31 @@ function restartShapeshifterWorker() {
 
 let controller: AbortController;
 
+let wakeLock: WakeLockSentinel | null = null;
+
+function logWakeLockState () {
+  console.log(`Screen Wake Lock ${wakeLock!.released ? 'released' : 'active'}`);
+}
+
 async function calculate (inputType: InputType, payload: PuzzleOptions) {
   error.value = undefined;
   pending.value = inputType;
+
+  wakeLock = await navigator.wakeLock.request();
+  wakeLock.addEventListener('release', logWakeLockState, { once: true });
+  logWakeLockState();
+
+  const cleanUp = () => {
+    wakeLock?.release();
+    wakeLock = null;
+  };
 
   // NOTE: Unfortunately, canceling a request does not stop the calculation in the backend.
   // You can't solve it at all, even with WebSockets/SSE. What a great day.
   controller = new AbortController();
   controller.signal.addEventListener('abort', () => {
     pending.value = false;
+    cleanUp();
 
     if (calculateInBrowser.value) {
       restartShapeshifterWorker();
@@ -403,16 +419,16 @@ async function calculate (inputType: InputType, payload: PuzzleOptions) {
   if (calculateInBrowser.value) {
     try {
       response = await new Promise<InstanceType<typeof Puzzle>>((resolve, reject) => {
-        shapeshifterWorker.onmessage = ({ data }) => {
-          const { event, payload } = data as {
-            event: 'status-update',
+        shapeshifterWorker.onmessage = (event) => {
+          const { type, payload } = event.data as {
+            type: 'status-update',
             payload: string;
           } | {
-            event: 'finished',
+            type: 'finished',
             payload: InstanceType<typeof Puzzle>;
           };
 
-          if (event === 'finished') {
+          if (type === 'finished') {
             resolve(payload);
             status.value = undefined;
           }
@@ -427,7 +443,7 @@ async function calculate (inputType: InputType, payload: PuzzleOptions) {
         };
 
         shapeshifterWorker.postMessage({
-          event: 'calculate',
+          type: 'calculate',
           payload: payload,
           settings: {
             preparePossibleSolutionStarts: preparePossibleSolutionStarts.value,
@@ -438,6 +454,7 @@ async function calculate (inputType: InputType, payload: PuzzleOptions) {
     catch (err) {
       error.value = (err as Error).toString();
       result.value = undefined;
+      cleanUp();
       throw err;
     }
   }
@@ -456,6 +473,7 @@ async function calculate (inputType: InputType, payload: PuzzleOptions) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       error.value = JSON.stringify((err as any).data.data, null, 2);
       result.value = undefined;
+      cleanUp();
       throw err;
     }
   }
@@ -463,6 +481,7 @@ async function calculate (inputType: InputType, payload: PuzzleOptions) {
   resultHash.value = await hashObject(response!);
   result.value = response;
   pending.value = false;
+  cleanUp();
 }
 
 function cancel() {

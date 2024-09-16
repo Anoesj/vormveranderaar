@@ -607,7 +607,7 @@ export class Puzzle {
         console.log(msg);
 
         postMessage({
-          event: 'status-update',
+          type: 'status-update',
           payload: msg,
         });
 
@@ -691,34 +691,34 @@ export class Puzzle {
     }
   }
 
-  #distanceToFocusArea (
-    focusArea: {
-      x1: number;
-      x2: number;
-      y1: number;
-      y2: number;
-    },
-    position: Position,
-    puzzlePieceCols: number,
-    puzzlePieceRows: number,
-  ): number {
-    const x1 = position.x;
-    const x2 = x1 + puzzlePieceCols;
-    const y1 = position.y;
-    const y2 = y1 + puzzlePieceRows;
+  // #distanceToFocusArea (
+  //   focusArea: {
+  //     x1: number;
+  //     x2: number;
+  //     y1: number;
+  //     y2: number;
+  //   },
+  //   position: Position,
+  //   puzzlePieceCols: number,
+  //   puzzlePieceRows: number,
+  // ): number {
+  //   const x1 = position.x;
+  //   const x2 = x1 + puzzlePieceCols;
+  //   const y1 = position.y;
+  //   const y2 = y1 + puzzlePieceRows;
 
-    const xDistance = Math.min(
-      Math.abs(x1 - focusArea.x1),
-      Math.abs(x2 - focusArea.x2),
-    );
+  //   const xDistance = Math.min(
+  //     Math.abs(x1 - focusArea.x1),
+  //     Math.abs(x2 - focusArea.x2),
+  //   );
 
-    const yDistance = Math.min(
-      Math.abs(y1 - focusArea.y1),
-      Math.abs(y2 - focusArea.y2),
-    );
+  //   const yDistance = Math.min(
+  //     Math.abs(y1 - focusArea.y1),
+  //     Math.abs(y2 - focusArea.y2),
+  //   );
 
-    return xDistance + yDistance;
-  }
+  //   return xDistance + yDistance;
+  // }
 
   /**
    * Indicates whether we ran into this exact situation before, so
