@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@nuxtjs/tailwindcss": "^6.12.1",
+    "@vee-validate/zod": "^4.13.2",
     "@vueuse/core": "^11.0.3",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
@@ -21,7 +22,8 @@
     "radix-vue": "^1.9.5",
     "shadcn-nuxt": "^0.10.4",
     "tailwind-merge": "^2.5.2",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwindcss-animate": "^1.0.7",
+    "vee-validate": "^4.13.2"
   },
   "devDependencies": {
     "@anoesj/eslint-config-anoesj": "github:anoesj/eslint-config-anoesj",

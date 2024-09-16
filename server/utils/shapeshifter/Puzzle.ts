@@ -12,6 +12,7 @@ import { Position } from './Position';
 import { PerfStat } from './PerfStat';
 import type { GridLike } from './Grid';
 import { PossibleSolution, type PuzzlePiecePlacementOptions } from './PossibleSolution';
+import { entries } from './objectHelpers';
 
 export type CornerType = 'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight';
 
@@ -198,9 +199,9 @@ export class Puzzle {
     }
 
     function compatible(data: Partial<Record<CornerType, PossiblePuzzlePieceCombination>>): boolean {
-      const keys = Object.keys(data) as CornerType[];
-      const keyCorner1 = keys[0]!;
-      const keyCorner2 = keys[1]!;
+      const cornerKeys = keys(data);
+      const keyCorner1 = cornerKeys[0]!;
+      const keyCorner2 = cornerKeys[1]!;
       const combinationCorner1 = data[keyCorner1]!;
       const combinationCorner2 = data[keyCorner2]!;
 
@@ -314,9 +315,9 @@ export class Puzzle {
               affectedCounts[affected]++;
             }
 
-            const affectedCountsCompatible = Object.entries(affectedCounts)
+            const affectedCountsCompatible = entries(affectedCounts)
               .every(([cornerType, affectedCount]) => {
-                return this.cornersInfo![cornerType as CornerType].possibleTransforms!.includes(affectedCount);
+                return this.cornersInfo![cornerType].possibleTransforms!.includes(affectedCount);
               });
 
             if (!affectedCountsCompatible) {
@@ -769,9 +770,9 @@ export class Puzzle {
     const get1CountRe = /1/g;
     const get1Count = (bin: string) => (bin.match(get1CountRe) || []).length;
 
-    for (const [cornerType, cornerInfo] of Object.entries(this.cornersInfo!)) {
+    for (const [cornerType, cornerInfo] of entries(this.cornersInfo!)) {
       cornerInfo.puzzlePiecesThatCanAffectState = Object.values(this.puzzlePieces)
-        .filter((puzzlePiece) => puzzlePiece.activeCorners[cornerType as CornerType])
+        .filter((puzzlePiece) => puzzlePiece.activeCorners[cornerType])
         .map((puzzlePiece) => puzzlePiece.id);
 
       cornerInfo.possiblePuzzlePieceCombinations = [];
@@ -794,9 +795,9 @@ export class Puzzle {
 
               let position: Position;
 
-              const affectedCorners: CornerType[] = [cornerType as CornerType];
+              const affectedCorners = [cornerType];
 
-              switch (cornerType as CornerType) {
+              switch (cornerType) {
                 case 'topLeft':
                   position = Position.get(
                     0,

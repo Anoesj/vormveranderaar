@@ -57,25 +57,28 @@
         </CardContent>
 
         <CardFooter>
-          <Button
-            v-if="pending !== 'example'"
-            variant="secondary"
-            :disabled="pending"
-            class="w-full gap-1"
-            @click="calculate('example')"
-          >
-            <Calculator/>
-            Calculate example
-          </Button>
-          <Button
-            v-else
-            variant="destructive"
-            @click="cancel"
-            class="w-full gap-1"
-          >
-            <X/>
-            Cancel
-          </Button>
+          <PuzzleBrowser @submit="calculate('example', $event)">
+            <template #trigger>
+              <Button
+                v-if="pending !== 'example'"
+                variant="secondary"
+                :disabled="pending"
+                class="w-full gap-1"
+              >
+                <Dices/>
+                Browse examples
+              </Button>
+              <Button
+                v-else
+                variant="destructive"
+                class="w-full gap-1"
+                @click.prevent="cancel()"
+              >
+                <X/>
+                Cancel
+              </Button>
+            </template>
+          </PuzzleBrowser>
         </CardFooter>
       </Card>
 
@@ -286,10 +289,10 @@ import { useLocalStorage } from '@vueuse/core';
 import {
   ArrowRight,
   BadgeCheck,
-  Calculator,
   CircleDashed,
   ClipboardPaste,
   Copy,
+  Dices,
   Printer,
   Puzzle as PuzzleIcon,
   Settings,
@@ -367,11 +370,7 @@ function restartShapeshifterWorker() {
 
 let controller: AbortController;
 
-// const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-async function calculate (inputType: 'example'): Promise<void>;
-async function calculate (inputType: 'input' | 'html', payload: PuzzleOptions): Promise<void>;
-async function calculate (inputType: InputType, payload?: PuzzleOptions) {
+async function calculate (inputType: InputType, payload: PuzzleOptions) {
   error.value = undefined;
   pending.value = inputType;
 
@@ -416,7 +415,7 @@ async function calculate (inputType: InputType, payload?: PuzzleOptions) {
 
         shapeshifterWorker.postMessage({
           event: 'calculate',
-          payload: payload ?? PuzzleLibrary.level10,
+          payload: payload,
           settings: {
             preparePossibleSolutionStarts: preparePossibleSolutionStarts.value,
           },

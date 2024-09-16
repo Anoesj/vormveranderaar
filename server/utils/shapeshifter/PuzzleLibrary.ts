@@ -6,6 +6,7 @@ export type PuzzleOptions = ClassArgs<typeof Puzzle>[0];
 export const PuzzleLibrary = {
   // ✅ Works
   p1: {
+    hide: true,
     figures: [0, 1],
     gameBoard: [
       [1, 1, 1, 1],
@@ -13,7 +14,6 @@ export const PuzzleLibrary = {
       [1, 0, 1, 1],
       [1, 1, 1, 1],
     ],
-    // prettier-ignore
     puzzlePieces: [
       [
         [1],
@@ -26,6 +26,7 @@ export const PuzzleLibrary = {
 
   // ✅ Works
   p2: {
+    hide: true,
     figures: [0, 1],
     gameBoard: [
       [1, 1, 1, 1],
@@ -33,7 +34,6 @@ export const PuzzleLibrary = {
       [1, 0, 0, 1],
       [1, 0, 1, 1],
     ],
-    // prettier-ignore
     puzzlePieces: [
       [
         [1],
@@ -52,12 +52,12 @@ export const PuzzleLibrary = {
 
   // ✅ Works
   p3: {
+    hide: true,
     figures: [0, 1, 2],
     gameBoard: [
       [2, 2],
       [2, 1],
     ],
-    // prettier-ignore
     puzzlePieces: [
       [
         [1],
@@ -67,13 +67,13 @@ export const PuzzleLibrary = {
 
   // ✅ Works
   p4: {
+    hide: true,
     figures: [0, 1, 2],
     gameBoard: [
       [2, 2, 2],
       [2, 1, 2],
       [2, 2, 2],
     ],
-    // prettier-ignore
     puzzlePieces: [
       [
         [1],
@@ -83,13 +83,13 @@ export const PuzzleLibrary = {
 
   // ✅ Works
   p5: {
+    hide: true,
     figures: [0, 1, 2],
     gameBoard: [
       [2, 2, 1],
       [2, 1, 2],
       [2, 2, 2],
     ],
-    // prettier-ignore
     puzzlePieces: [
       [
         [1],
@@ -102,13 +102,13 @@ export const PuzzleLibrary = {
 
   // ✅ Works
   p6: {
+    hide: true,
     figures: [0, 1, 2],
     gameBoard: [
       [2, 2, 2],
       [2, 0, 2],
       [2, 2, 2],
     ],
-    // prettier-ignore
     puzzlePieces: [
       [
         [1],
@@ -121,6 +121,7 @@ export const PuzzleLibrary = {
 
   // ✅ Works
   p8: {
+    hide: true,
     figures: [0, 1, 2],
     gameBoard: [
       [2, 2, 2, 2],
@@ -128,7 +129,6 @@ export const PuzzleLibrary = {
       [2, 2, 2, 2],
       [1, 2, 2, 2],
     ],
-    // prettier-ignore
     puzzlePieces: [
       [
         [1],
@@ -144,6 +144,7 @@ export const PuzzleLibrary = {
 
   // ✅ Works
   p9: {
+    hide: true,
     figures: [0, 1, 2],
     gameBoard: [
       [2, 2, 2, 2],
@@ -151,7 +152,6 @@ export const PuzzleLibrary = {
       [2, 2, 2, 2],
       [1, 2, 2, 2],
     ],
-    // prettier-ignore
     puzzlePieces: [
       [
         [1, 1, 1],
@@ -170,6 +170,7 @@ export const PuzzleLibrary = {
 
   // ✅ Works
   p10: {
+    hide: true,
     figures: [0, 1, 2],
     gameBoard: [
       [1, 1, 1, 1],
@@ -177,7 +178,6 @@ export const PuzzleLibrary = {
       [2, 2, 2, 2],
       [1, 2, 2, 2],
     ],
-    // prettier-ignore
     puzzlePieces: [
       [
         [1, 1, 1, 1],
@@ -199,13 +199,13 @@ export const PuzzleLibrary = {
 
   // ✅ Works
   p16: {
+    hide: true,
     figures: [0, 1],
     gameBoard: [
       [0, 0, 0],
       [0, 1, 1],
       [0, 1, 1],
     ],
-    // prettier-ignore
     puzzlePieces: [
       [
         [1],
@@ -222,13 +222,13 @@ export const PuzzleLibrary = {
 
   // ✅ Works
   p17: {
+    hide: true,
     figures: [0, 1],
     gameBoard: [
       [1, 1, 1],
       [0, 0, 1],
       [1, 0, 0],
     ],
-    // prettier-ignore
     puzzlePieces: [
       [
         [1],
@@ -252,8 +252,9 @@ export const PuzzleLibrary = {
     ],
   },
 
-  // ❌ Too complex, somewhere around possible solution start #208/388, it just stops calculating.
+  // ✅ Works
   p18: {
+    hide: false,
     figures: [0, 1],
     gameBoard: [
       [1, 0, 0, 1, 0, 1],
@@ -263,7 +264,6 @@ export const PuzzleLibrary = {
       [1, 1, 1, 1, 0, 1],
       [1, 0, 0, 1, 0, 1],
     ],
-    // prettier-ignore
     puzzlePieces: [
       [
         [0, 1, 1, 1],
@@ -339,13 +339,13 @@ export const PuzzleLibrary = {
 
   // ✅ There's definitely no solution to be found here.
   p19: {
+    hide: true,
     figures: [0, 1],
     gameBoard: [
       [0, 1, 0],
       [1, 1, 0],
       [0, 0, 0],
     ],
-    // prettier-ignore
     puzzlePieces: [
       [
         [1, 0],
@@ -364,13 +364,13 @@ export const PuzzleLibrary = {
   },
 
   level7: {
+    hide: true,
     figures: [0, 1],
     gameBoard: [
       [0, 0, 0],
       [1, 0, 1],
       [0, 1, 0],
     ],
-    // prettier-ignore
     puzzlePieces: [
       [
         [1, 0],
@@ -411,13 +411,13 @@ export const PuzzleLibrary = {
   },
 
   level8: {
+    hide: true,
     figures: [0, 1],
     gameBoard: [
       [1, 1, 1],
       [1, 1, 1],
       [0, 0, 1],
     ],
-    // prettier-ignore
     puzzlePieces: [
       [
         [1],
@@ -460,13 +460,13 @@ export const PuzzleLibrary = {
   },
 
   level9: {
+    hide: true,
     figures: [0, 1],
     gameBoard: [
       [0, 1, 1],
       [0, 0, 0],
       [1, 0, 0],
     ],
-    // prettier-ignore
     puzzlePieces: [
       [
         [0, 1, 1],
@@ -511,13 +511,13 @@ export const PuzzleLibrary = {
   },
 
   level10: {
+    hide: true,
     figures: [0, 1],
     gameBoard: [
       [1, 0, 1],
       [1, 0, 1],
       [1, 0, 1],
     ],
-    // prettier-ignore
     puzzlePieces: [
       [
         [1, 1, 0],
@@ -572,7 +572,9 @@ export const PuzzleLibrary = {
   },
 
   level18: {
-    figures: ['gob_0', 'swo_0'],
+    hide: false,
+    name: 'Level 18',
+    figures: ['https://images.neopets.com/medieval/shapeshifter/gob_0.gif', 'https://images.neopets.com/medieval/shapeshifter/swo_0.gif'],
     gameBoard: [
       [1, 0, 0],
       [0, 0, 0],
@@ -647,7 +649,9 @@ export const PuzzleLibrary = {
   },
 
   level19: {
-    figures: ['cro_0', 'swo_0'],
+    hide: false,
+    name: 'Level 19',
+    figures: ['https://images.neopets.com/medieval/shapeshifter/cro_0.gif', 'https://images.neopets.com/medieval/shapeshifter/swo_0.gif'],
     gameBoard: [
       [0, 1, 0],
       [1, 0, 1],
@@ -725,7 +729,9 @@ export const PuzzleLibrary = {
   },
 
   level20: {
-    figures: ['gob_0', 'swo_0'],
+    hide: false,
+    name: 'Level 20',
+    figures: ['https://images.neopets.com/medieval/shapeshifter/gob_0.gif', 'https://images.neopets.com/medieval/shapeshifter/swo_0.gif'],
     gameBoard: [
       [1, 1, 0],
       [1, 1, 1],
@@ -802,7 +808,9 @@ export const PuzzleLibrary = {
   },
 
   level21: {
-    figures: ['gau_0', 'swo_0'],
+    hide: false,
+    name: 'Level 21',
+    figures: ['https://images.neopets.com/medieval/shapeshifter/gau_0.gif', 'https://images.neopets.com/medieval/shapeshifter/swo_0.gif'],
     gameBoard: [
       [0, 0, 1, 1],
       [0, 1, 0, 1],
@@ -867,7 +875,9 @@ export const PuzzleLibrary = {
   },
 
   level22: {
-    figures: ['cro_0', 'swo_0'],
+    hide: false,
+    name: 'Level 22',
+    figures: ['https://images.neopets.com/medieval/shapeshifter/cro_0.gif', 'https://images.neopets.com/medieval/shapeshifter/swo_0.gif'],
     gameBoard: [
       [1, 1, 0, 1],
       [1, 1, 0, 0],
@@ -933,7 +943,9 @@ export const PuzzleLibrary = {
   },
 
   level23: {
-    figures: ['gau_0', 'swo_0'],
+    hide: false,
+    name: 'Level 23',
+    figures: ['https://images.neopets.com/medieval/shapeshifter/gau_0.gif', 'https://images.neopets.com/medieval/shapeshifter/swo_0.gif'],
     gameBoard: [
       [1, 1, 1, 1],
       [1, 0, 1, 0],
@@ -1012,7 +1024,9 @@ export const PuzzleLibrary = {
   },
 
   level24: {
-    figures: ['cro_0', 'swo_0'],
+    hide: false,
+    name: 'Level 24',
+    figures: ['https://images.neopets.com/medieval/shapeshifter/cro_0.gif', 'https://images.neopets.com/medieval/shapeshifter/swo_0.gif'],
     gameBoard: [
       [0, 0, 0, 0],
       [1, 0, 0, 1],
@@ -1091,7 +1105,9 @@ export const PuzzleLibrary = {
   },
 
   level25: {
-    figures: ['gob_0', 'swo_0'],
+    hide: false,
+    name: 'Level 25',
+    figures: ['https://images.neopets.com/medieval/shapeshifter/gob_0.gif', 'https://images.neopets.com/medieval/shapeshifter/swo_0.gif'],
     gameBoard: [
       [0, 1, 1, 1],
       [0, 1, 1, 0],
@@ -1176,7 +1192,9 @@ export const PuzzleLibrary = {
   },
 
   level26: {
-    figures: ['gob_0', 'cro_0', 'swo_0'],
+    hide: false,
+    name: 'Level 26',
+    figures: ['https://images.neopets.com/medieval/shapeshifter/gob_0.gif', 'https://images.neopets.com/medieval/shapeshifter/cro_0.gif', 'https://images.neopets.com/medieval/shapeshifter/swo_0.gif'],
     gameBoard: [
       [1, 1, 1, 2],
       [2, 2, 0, 2],
@@ -1238,7 +1256,9 @@ export const PuzzleLibrary = {
   },
 
   level27: {
-    figures: ['cro_0', 'hel_0', 'swo_0'],
+    hide: false,
+    name: 'Level 27',
+    figures: ['https://images.neopets.com/medieval/shapeshifter/cro_0.gif', 'https://images.neopets.com/medieval/shapeshifter/hel_0.gif', 'https://images.neopets.com/medieval/shapeshifter/swo_0.gif'],
     gameBoard: [
       [2, 2, 2, 2],
       [0, 1, 2, 1],
@@ -1303,7 +1323,9 @@ export const PuzzleLibrary = {
   },
 
   level28: {
-    figures: ['gob_0', 'gau_0', 'swo_0'],
+    hide: false,
+    name: 'Level 28',
+    figures: ['https://images.neopets.com/medieval/shapeshifter/gob_0.gif', 'https://images.neopets.com/medieval/shapeshifter/gau_0.gif', 'https://images.neopets.com/medieval/shapeshifter/swo_0.gif'],
     gameBoard: [
       [2, 0, 0, 0],
       [2, 0, 2, 0],
@@ -1379,7 +1401,9 @@ export const PuzzleLibrary = {
   },
 
   level29: {
-    figures: ['gau_0', 'cro_0', 'swo_0'],
+    hide: false,
+    name: 'Level 29',
+    figures: ['https://images.neopets.com/medieval/shapeshifter/gau_0.gif', 'https://images.neopets.com/medieval/shapeshifter/cro_0.gif', 'https://images.neopets.com/medieval/shapeshifter/swo_0.gif'],
     gameBoard: [
       [0, 2, 0, 1],
       [2, 0, 2, 0],
@@ -1457,7 +1481,9 @@ export const PuzzleLibrary = {
   },
 
   level30: {
-    figures: ['cro_0', 'gob_0', 'swo_0'],
+    hide: false,
+    name: 'Level 30',
+    figures: ['https://images.neopets.com/medieval/shapeshifter/cro_0.gif', 'https://images.neopets.com/medieval/shapeshifter/gob_0.gif', 'https://images.neopets.com/medieval/shapeshifter/swo_0.gif'],
     gameBoard: [
       [2, 2, 2, 2],
       [1, 2, 0, 2],
@@ -1537,6 +1563,8 @@ export const PuzzleLibrary = {
   },
 
   level31: {
+    hide: false,
+    name: 'Level 31',
     figures: ['https://images.neopets.com/medieval/shapeshifter/cro_0.gif', 'https://images.neopets.com/medieval/shapeshifter/swo_0.gif'],
     gameBoard: [
       [0, 0, 1, 0, 0, 1],
@@ -1613,6 +1641,8 @@ export const PuzzleLibrary = {
   },
 
   level32: {
+    hide: false,
+    name: 'Level 32',
     figures: ['https://images.neopets.com/medieval/shapeshifter/hel_0.gif', 'https://images.neopets.com/medieval/shapeshifter/swo_0.gif'],
     gameBoard: [
       [1, 0, 0, 0, 0, 0],
@@ -1692,6 +1722,8 @@ export const PuzzleLibrary = {
   },
 
   level33: {
+    hide: false,
+    name: 'Level 33',
     figures: ['https://images.neopets.com/medieval/shapeshifter/hel_0.gif', 'https://images.neopets.com/medieval/shapeshifter/swo_0.gif'],
     gameBoard: [
       [0, 1, 0, 1, 0, 1],
@@ -1776,6 +1808,8 @@ export const PuzzleLibrary = {
   },
 
   level34: {
+    hide: false,
+    name: 'Level 34',
     figures: ['https://images.neopets.com/medieval/shapeshifter/cro_0.gif', 'https://images.neopets.com/medieval/shapeshifter/swo_0.gif'],
     gameBoard: [
       [0, 1, 1, 1, 1, 0],
@@ -1849,6 +1883,8 @@ export const PuzzleLibrary = {
   },
 
   level35: {
+    hide: false,
+    name: 'Level 35',
     figures: ['https://images.neopets.com/medieval/shapeshifter/gau_0.gif', 'https://images.neopets.com/medieval/shapeshifter/swo_0.gif'],
     gameBoard: [
       [1, 1, 1, 1, 1, 1],
@@ -1926,6 +1962,8 @@ export const PuzzleLibrary = {
   },
 
   level36: {
+    hide: false,
+    name: 'Level 36',
     figures: ['https://images.neopets.com/medieval/shapeshifter/hel_0.gif', 'https://images.neopets.com/medieval/shapeshifter/cro_0.gif', 'https://images.neopets.com/medieval/shapeshifter/swo_0.gif'],
     gameBoard: [
       [2, 1, 0, 0, 1, 1],
@@ -2010,4 +2048,13 @@ export const PuzzleLibrary = {
       ],
     ],
   },
-} satisfies Record<string, PuzzleOptions>;
+} as const satisfies Record<string, PuzzleOptions & { hide: boolean; name?: string; }>;
+
+// Helper type to exclude puzzles with `hide: true`
+type ExcludeHidden<T extends Record<string, { hide: boolean }>> = {
+  [K in keyof T as T[K]['hide'] extends true ? never : K]: T[K];
+} & {};
+
+export const SelectablePuzzleLibrary = fromEntries(
+  entries(PuzzleLibrary).filter(([_, v]) => !v.hide) as Entries<typeof PuzzleLibrary>
+) as ExcludeHidden<typeof PuzzleLibrary>;
