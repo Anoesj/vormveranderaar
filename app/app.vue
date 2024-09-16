@@ -1,7 +1,7 @@
 <template>
   <div class="flex flex-col gap-6 py-8">
     <div class="wrapper flex flex-wrap gap-4">
-      <Card class="grow shrink-0 basis-[min(400px,100%-4rem)] bg-[#f8fafc]">
+      <Card class="grow shrink-0 w-[min(400px,100%-4rem)] bg-[#f8fafc]">
         <CardHeader>
           <CardTitle>Input</CardTitle>
         </CardHeader>
@@ -13,7 +13,7 @@
             class="w-full gap-1"
             @click="getClipboardContents('html')"
           >
-            <ClipboardPaste/>
+            <ClipboardPaste class="shrink-0"/>
             Paste Neopets HTML
           </Button>
           <Button
@@ -22,7 +22,7 @@
             class="w-full gap-1"
             @click="cancel()"
           >
-            <X/>
+            <X class="shrink-0"/>
             Cancel
           </Button>
         </CardContent>
@@ -38,7 +38,7 @@
             class="w-full gap-1"
             @click="getClipboardContents('input')"
           >
-            <ClipboardPaste/>
+            <ClipboardPaste class="shrink-0"/>
             Paste API input
           </Button>
           <Button
@@ -47,7 +47,7 @@
             class="w-full gap-1"
             @click="cancel()"
           >
-            <X/>
+            <X class="shrink-0"/>
             Cancel
           </Button>
         </CardContent>
@@ -65,7 +65,7 @@
                 :disabled="pending"
                 class="w-full gap-1"
               >
-                <Dices/>
+                <Dices class="shrink-0"/>
                 Browse examples
               </Button>
               <Button
@@ -74,7 +74,7 @@
                 class="w-full gap-1"
                 @click.prevent.capture="cancel()"
               >
-                <X/>
+                <X class="shrink-0"/>
                 Cancel
               </Button>
             </template>
@@ -82,7 +82,7 @@
         </CardFooter>
       </Card>
 
-      <Card class="grow shrink-0 basis-[min(400px,100%-4rem)] bg-[#f8fafc] flex flex-col">
+      <Card class="grow shrink-0 w-[min(400px,100%-4rem)] bg-[#f8fafc] flex flex-col">
         <CardHeader>
           <CardTitle>Formatted</CardTitle>
         </CardHeader>
@@ -101,13 +101,13 @@
             class="w-full gap-1"
             @click="copyToClipboard()"
           >
-            <Copy/>
+            <Copy class="shrink-0"/>
             Copy API input
           </Button>
         </CardContent>
       </Card>
 
-      <Card class="grow shrink-0 basis-[min(600px,100%-4rem)] bg-[#f8fafc]">
+      <Card class="grow shrink-0 w-[min(600px,100%-4rem)] bg-[#f8fafc]">
         <CardHeader class="flex flex-row items-center justify-between gap-4">
           <div class="flex gap-4">
             <div class="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-4">
@@ -162,7 +162,7 @@
           }"
         >
           <div class="flex gap-8 flex-wrap">
-            <div class="grow shrink-0 basis-[min(400px,100%-4rem)]">
+            <div class="grow shrink-0 w-[min(400px,100%-4rem)]">
               <h2>Info</h2>
               <p>{{ result.solutions.length > 0 ? '✅' : '❌' }} <strong>{{ result.solutions.length > 0 ? `${result.solutions.length} solution${result.solutions.length > 1 ? 's' : ''} found` : 'no solution found' }}</strong></p>
               <p>ℹ️ <strong>{{ result.meta.returningMaxOneSolution ? 'Maximum of one solution returned for better performance' : 'Looked for all possible solutions' }}</strong></p>
@@ -186,7 +186,7 @@
               }}</p>
               <p>Throughput: <strong>{{ numberFormatter.format(result.meta.throughput) }} Hz</strong> (combinations per second)</p>
             </div>
-            <div class="grow shrink-0 basis-[min(400px,100%-4rem)] overflow-x-auto">
+            <div class="grow shrink-0 w-[min(400px,100%-4rem)] overflow-x-auto">
               <h2>Game board</h2>
               <div class="f flex-wrap gap-y-4 mt-4">
                 <div>
@@ -287,7 +287,10 @@
             size="lg"
             @click="print"
             class="my-8 w-full gap-1"
-          ><Printer/> Print results</Button>
+          >
+            <Printer class="shrink-0"/>
+            Print results
+          </Button>
         </div>
       </div>
     </Transition>
@@ -480,6 +483,9 @@ async function print() {
 
 useHead({
   title: 'Neopets Shapeshifter Solver',
+  htmlAttrs: {
+    lang: 'en',
+  },
   meta: [
     { name: 'description', content: 'Solve puzzles' },
   ],
@@ -496,7 +502,8 @@ html {
   --easing-cubic: cubic-bezier(0.4, 0, 0.2, 1);
   font-family: "Urbanist", sans-serif;
   font-optical-sizing: auto;
-  font-size: 20px;
+  // font-size: 20px;
+  @apply max-sm:text-[16px] sm:max-md:text-[18px] md:text-[20px];
   font-weight: 500;
   line-height: 1.8;
   // background-color: hsl(37.82deg 95.8% 53.1% / 9%);
@@ -509,6 +516,19 @@ html {
     );
   background-size: 400px 400px, 18px 18px;
   background-repeat: round, space;
+
+  overflow-wrap: anywhere;
+
+  /// If browsers support configuring `hyphenate-limit-chars`, we enable hyphenation.
+  /// This is because by default, hyphens are added way too often, even in the middle
+  /// 6-letter words. In browsers where `hyphenate-limit-chars` is not supported, we
+  /// just disable hyphenation so words are not broken up in the middle, unless they
+  /// are broken up by `overflow-wrap: anywhere`, which is a little more conservative
+  /// than `hyphens: auto`.
+  @supports (hyphenate-limit-chars: 10 6 4) {
+    hyphens: auto;
+    hyphenate-limit-chars: 10 6 4;
+  }
 }
 
 body {
@@ -550,7 +570,7 @@ ul {
 }
 
 .wrapper {
-  @apply mx-auto w-[calc(100%-4rem)] max-w-screen-xl;
+  @apply mx-auto max-sm:w-[calc(100%-3rem)] sm:w-[calc(100%-4rem)] max-w-screen-xl;
 }
 
 .g {

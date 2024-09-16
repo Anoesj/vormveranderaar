@@ -34,7 +34,7 @@
             class="gap-1"
             @click="$emit('submit', SelectablePuzzleLibrary[selectedPuzzle])"
           >
-            <Calculator/>
+            <Calculator class="shrink-0"/>
             Calculate
           </Button>
         </DialogClose>
