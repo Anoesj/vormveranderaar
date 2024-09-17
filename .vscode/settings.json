@@ -1,0 +1,88 @@
+{
+  "search.exclude": {
+    "**/node_modules": true,
+    ".vscode": true,
+    "**/.nuxt": true,
+  },
+  "editor.suggest.localityBonus": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit",
+    "source.fixAll.stylelint": "explicit"
+  },
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "npm.packageManager": "bun",
+  "eslint.useFlatConfig": true,
+  "eslint.validate": [
+    "javascript",
+    "typescript",
+    "vue",
+  ],
+  "stylelint.validate": [
+    "scss",
+    "vue",
+  ],
+  "vue.updateImportsOnFileMove.enabled": false,
+  "todo-tree.regex.regex": "s*($TAGS)",
+  "todo-tree.general.tags": [
+    "FIXME:",
+    "HACK:",
+    "REVIEW:",
+    "TODO:",
+    "test.todo",
+    "NOTE:",
+    "IDEA:",
+    "EXCEPTION:"
+  ],
+  "todo-tree.highlights.highlightDelay": 20,
+  "todo-tree.highlights.defaultHighlight": {},
+  "todo-tree.highlights.customHighlight": {
+    "FIXME:": {
+      "icon": "alert",
+      "background": "#e91e3d",
+      "foreground": "#ffffff",
+      "type": "line"
+    },
+    "HACK:": {
+      "icon": "beaker",
+      "background": "#5fba7d",
+      "foreground": "#ffffff",
+      "type": "text"
+    },
+    "REVIEW:": {
+      "icon": "eye",
+      "background": "#673ab7",
+      "foreground": "#ffffff",
+      "type": "text"
+    },
+    "TODO:": {
+      "icon": "check",
+      "background": "#ff812a",
+      "foreground": "#ffffff",
+      "type": "tag"
+    },
+    "test.todo": {
+      "icon": "beaker",
+      "background": "#ff812a",
+      "foreground": "#ffffff",
+      "type": "tag"
+    },
+    "NOTE:": {
+      "icon": "comment",
+      "background": "#0078d4",
+      "foreground": "#ffffff",
+      "type": "tag"
+    },
+    "IDEA:": {
+      "icon": "light-bulb",
+      "background": "#f7efb0",
+      "foreground": "#000000",
+      "type": "tag"
+    },
+    "EXCEPTION:": {
+      "icon": "git-branch",
+      "background": "#da03c4",
+      "foreground": "#ffffff",
+      "type": "tag"
+    }
+  },
+}

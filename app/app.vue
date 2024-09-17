@@ -28,7 +28,11 @@
         </CardContent>
 
         <CardContent class="mt-[-1rem] pb-1">
-          <Separator class="my-4" label="Or" labelClass="bg-[#f8fafc]" />
+          <Separator
+            class="my-4"
+            label="Or"
+            labelClass="bg-[#f8fafc]"
+          />
         </CardContent>
 
         <CardContent>
@@ -53,7 +57,11 @@
         </CardContent>
 
         <CardContent class="mt-[-1rem] pb-1">
-          <Separator class="my-4" label="Or" labelClass="bg-[#f8fafc]" />
+          <Separator
+            class="my-4"
+            label="Or"
+            labelClass="bg-[#f8fafc]"
+          />
         </CardContent>
 
         <CardFooter>
@@ -115,20 +123,39 @@
                 id="show-figures"
                 v-model:checked="showFigures"
               />
-              <Label for="show-figures" class="leading-5">Show original figures on game boards (if available)<br><span class="text-gray-400">If turned off, a numeric representation will be shown.</span></Label>
+              <Label for="show-figures" class="leading-5">
+                Show original figures on game boards (if available)
+                <br>
+                <span class="text-gray-400">
+                  If turned off, a numeric representation will be shown.
+                </span>
+              </Label>
 
               <Switch
                 id="calculate-in-browser"
                 v-model:checked="calculateInBrowser"
                 :disabled="runtimeConfig.public.calculateInBrowserOnly"
               />
-              <Label for="calculate-in-browser" class="leading-5">Calculate in-browser (experimental)<br><span class="text-gray-400">This will run the calculation in your browser instead of in the Bun-powered server.</span></Label>
+              <Label for="calculate-in-browser" class="leading-5">
+                Calculate in-browser (experimental)
+                <br>
+                <span class="text-gray-400">
+                  This will run the calculation in your browser instead of in the Bun-powered server.
+                </span>
+              </Label>
 
               <Switch
                 id="prepare-possible-solution-starts"
                 v-model:checked="preparePossibleSolutionStarts"
               />
-              <Label for="prepare-possible-solution-starts" class="leading-5">Prepare possible solution starts<br><span class="text-gray-400">When enabled, we won't just brute force the puzzle, but prepare some possible solution starts based on correct corner outputs.</span></Label>
+              <Label for="prepare-possible-solution-starts" class="leading-5">
+                Prepare possible solution starts
+                <br>
+                <span class="text-gray-400">
+                  When enabled, we won't just brute force the puzzle, but prepare some
+                  possible solution starts based on correct corner outputs.
+                </span>
+              </Label>
             </div>
           </div>
 
@@ -191,7 +218,7 @@
               <div class="f flex-wrap gap-y-4 mt-4">
                 <div>
                   <div>Current</div>
-                  <Grid :grid="result.gameBoard" />
+                  <Grid :grid="result.gameBoard"/>
                 </div>
                 <div>
                   <div>&nbsp;</div>
@@ -199,7 +226,7 @@
                 </div>
                 <div>
                   <div>Goal</div>
-                  <Grid :grid="result.gameBoard" :replaceAllWith="result.targetFigure" />
+                  <Grid :grid="result.gameBoard" :replaceAllWith="result.targetFigure"/>
                 </div>
               </div>
 
@@ -236,7 +263,7 @@
               >
                 <h3>{{ puzzlePiece.id }}</h3>
                 <p>{{ puzzlePiece.possiblePositions.length }} possible positions</p>
-                <Grid :grid="puzzlePiece.grid" isPuzzlePieceGrid />
+                <Grid :grid="puzzlePiece.grid" isPuzzlePieceGrid/>
               </div>
             </div>
           </Details>
@@ -285,8 +312,8 @@
 
           <Button
             size="lg"
-            @click="print"
             class="my-8 w-full gap-1"
+            @click="print()"
           >
             <Printer class="shrink-0"/>
             Print results
@@ -348,7 +375,7 @@ async function getClipboardContents (inputType: Exclude<InputType, 'example'>) {
 
     puzzleOptions.value = inputType === 'html'
       ? parseNeopetsHtml(text)
-      : Function('"use strict"; return (' + (text.endsWith(',') ? text.slice(0, -1) : text) + ')')() as PuzzleOptions;
+      : Function(`"use strict"; return (${text.endsWith(',') ? text.slice(0, -1) : text})`)() as PuzzleOptions;
 
     calculate(inputType, puzzleOptions.value);
   }
@@ -359,8 +386,9 @@ async function getClipboardContents (inputType: Exclude<InputType, 'example'>) {
 
 async function copyToClipboard () {
   try {
-    await navigator.clipboard.writeText(puzzleOptionsStringified.value)
-  } catch (err) {
+    await navigator.clipboard.writeText(puzzleOptionsStringified.value);
+  }
+  catch (err) {
     console.error('Failed to copy to clipboard', err);
   }
 }
@@ -376,7 +404,7 @@ watch(calculateInBrowser, (value) => {
   }
 }, { immediate: true });
 
-function restartShapeshifterWorker() {
+function restartShapeshifterWorker () {
   shapeshifterWorker?.terminate();
   shapeshifterWorker = new ShapeshifterWorker();
 }
@@ -484,12 +512,12 @@ async function calculate (inputType: InputType, payload: PuzzleOptions) {
   cleanUp();
 }
 
-function cancel() {
+function cancel () {
   console.log('Canceling calculation');
   controller?.abort('User canceled');
 }
 
-async function print() {
+async function print () {
   isPrinting.value = true;
   await nextTick();
   window.print();

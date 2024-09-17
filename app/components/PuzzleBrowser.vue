@@ -1,9 +1,9 @@
 <template>
   <Dialog>
-    <DialogTrigger as-child>
-      <slot name="trigger"/>
+    <DialogTrigger asChild>
+      <slot name="trigger"></slot>
     </DialogTrigger>
-    <DialogContent class="w-[calc(100dvw-6rem)] max-w-[1200px] max-h-[calc(100dvh-6rem)] p-0 grid-rows-[auto_minmax(0,1fr)_auto]">
+    <DialogContent class="max-w-[1200px] p-0 grid-rows-[auto_minmax(0,1fr)_auto] max-sm:w-[calc(100dvw-3rem)] max-sm:max-h-[calc(100dvh-3rem)] sm:w-[calc(100dvw-6rem)] sm:max-h-[calc(100dvh-6rem)]">
       <DialogHeader class="p-6 pb-0">
         <DialogTitle>Browse puzzles</DialogTitle>
         <DialogDescription>

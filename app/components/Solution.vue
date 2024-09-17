@@ -9,10 +9,23 @@
     <div v-else class="overflow-x-auto">
       <div class="grid grid-cols-[auto_1fr] items-center gap-2 my-4">
         <Switch :id="sortCheckboxId" v-model:checked="showSorted"/>
-        <Label :for="sortCheckboxId" class="leading-5">Sort by puzzle piece order<br><span class="text-gray-400">Before and after situations will be hidden if turned on, because the stacking of puzzle pieces is not recalculated upon changing sort order.</span></Label>
+        <Label :for="sortCheckboxId" class="leading-5">
+          Sort by puzzle piece order
+          <br>
+          <span class="text-gray-400">
+            Before and after situations will be hidden if turned on, because the stacking of puzzle
+            pieces is not recalculated upon changing sort order.
+          </span>
+        </Label>
 
         <Switch :id="autoScrollCheckboxId" v-model:checked="autoScroll"/>
-        <Label :for="autoScrollCheckboxId" class="leading-5">Auto-scroll<br><span class="text-gray-400">Press Escape or scroll manually to stop auto-scrolling.</span></Label>
+        <Label :for="autoScrollCheckboxId" class="leading-5">
+          Auto-scroll
+          <br>
+          <span class="text-gray-400">
+            Press Escape or scroll manually to stop auto-scrolling.
+          </span>
+        </Label>
       </div>
 
       <template
@@ -32,7 +45,7 @@
             <Grid :grid="part.before!"/>
             <Plus/>
           </template>
-          <Grid :grid="part.grid" isPuzzlePieceGrid />
+          <Grid :grid="part.grid" isPuzzlePieceGrid/>
           <template v-if="!isPrinting && !showSorted">
             <Equal/>
             <Grid :grid="part.after!"/>
@@ -64,7 +77,7 @@ const autoScroll = useAutoScroll(40);
 const sortCheckboxId = computed(() => useId());
 const autoScrollCheckboxId = computed(() => useId());
 
-const parts = computed(() => showSorted.value
+const parts = computed(() => (showSorted.value
   ? solution.parts.toSorted((a, b) => a.id.localeCompare(b.id, 'nl-NL'))
-  : solution.parts);
+  : solution.parts));
 </script>
