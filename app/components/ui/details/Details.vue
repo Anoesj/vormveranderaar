@@ -15,7 +15,7 @@
       </span>
     </summary>
     <div v-if="isOpen" class="p-4">
-      <slot/>
+      <slot></slot>
     </div>
   </details>
 </template>

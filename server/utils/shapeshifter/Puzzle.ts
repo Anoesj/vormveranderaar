@@ -194,7 +194,7 @@ export class Puzzle {
     const addToLogQueue = (...log: unknown[]) => {
       logQueue.push(log);
       maybeFlushLogQueue();
-    }
+    };
 
     function flushLogQueue () {
       const logQueueLength = logQueue.length;
@@ -211,7 +211,7 @@ export class Puzzle {
       if (performance.now() - lastFlushedLogQueue > 5000) {
         flushLogQueue();
       }
-    }
+    };
 
     /*
       Some notes:
@@ -219,14 +219,14 @@ export class Puzzle {
       - We take into account that some puzzle pieces will always hit one or more corners.
     */
 
-    function getPartById(
+    function getPartById (
       c: PossiblePuzzlePieceCombination,
       id: PuzzlePiece['id'],
     ) {
       return c.find((part) => part.id === id);
     }
 
-    function compatible(data: Partial<Record<CornerType, PossiblePuzzlePieceCombination>>): boolean {
+    function compatible (data: Partial<Record<CornerType, PossiblePuzzlePieceCombination>>): boolean {
       const cornerKeys = keys(data);
       const keyCorner1 = cornerKeys[0]!;
       const keyCorner2 = cornerKeys[1]!;
@@ -272,7 +272,7 @@ export class Puzzle {
     function intersect<
       T1 extends PossiblePuzzlePieceCombination,
       T2 extends PossiblePuzzlePieceCombination,
-    >(arr1: T1, arr2: T2): (T1 | T2)[number]['id'][] {
+    > (arr1: T1, arr2: T2): (T1 | T2)[number]['id'][] {
       return arr1
         .filter((item1) => arr2.find((item2) => item2.id === item1.id))
         .map((item) => item.id);
@@ -442,7 +442,7 @@ export class Puzzle {
     // This allows us to skip preparing the possible solution starts
     // if that's more feasible performance-wise.
     if (!this.#hasPreparedSolutionStarts) {
-      const blankSolutionStart = new PossibleSolution(this.targetFigure)
+      const blankSolutionStart = new PossibleSolution(this.targetFigure);
       blankSolutionStart.solutionStartIndex = 0;
       this.possibleSolutionStarts.push(blankSolutionStart);
     }
@@ -545,7 +545,7 @@ export class Puzzle {
     this.#finalize();
   }
 
-  *#puzzlePiecePlacementOptionsIterator({
+  *#puzzlePiecePlacementOptionsIterator ({
     gameBoard,
     baseSolution,
     current,
@@ -775,7 +775,10 @@ export class Puzzle {
     const perfStats = this.#perf;
 
     for (const [k, v] of Object.entries(perfStats)) {
-      if (!v.length) continue;
+      if (!v.length) {
+        continue;
+      }
+
       console.log('');
       console.log(
         `Average time spent in ${k}: ${v.average} ms`

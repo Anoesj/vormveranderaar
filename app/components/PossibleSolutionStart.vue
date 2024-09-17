@@ -27,16 +27,17 @@
         <h5>{{ part.id }} at (x: {{ part.position.x }}, y: {{ part.position.y }})</h5>
 
         <div class="f">
-          <Grid :grid="part.before!" />
+          <Grid :grid="part.before!"/>
           <Plus/>
-          <Grid :grid="part.grid" isPuzzlePieceGrid />
+          <Grid :grid="part.grid" isPuzzlePieceGrid/>
           <Equal/>
-          <Grid :grid="part.after!" />
+          <Grid :grid="part.after!"/>
           <span
             v-if="part.after!.isSolution !== undefined"
             style="font-size: 1.5rem; margin-left: 0.5rem"
-            >{{ state.emoji }}</span
           >
+            {{ state.emoji }}
+          </span>
         </div>
       </template>
     </template>

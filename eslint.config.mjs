@@ -23,7 +23,6 @@ export default withNuxt(
   {
     files: ['**/*.vue'],
     rules: {
-      'indent': 'off',
       'vue/html-self-closing': ['error', {
         html: {
           normal: 'never',
@@ -40,6 +39,7 @@ export default withNuxt(
   {
     files: ['**/*.ts', '**/*.vue'],
     rules: {
+      'indent': 'off', // TODO: We need to use the TS variant of this
       'no-undef': 'off',
       'no-unused-vars': 'off',
       'no-redeclare': 'off',

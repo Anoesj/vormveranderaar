@@ -31,7 +31,7 @@ export function parseNeopetsHtml (html: string): PuzzleOptions {
       // Filled cell should become 1
       return Array.from(td.querySelectorAll('tr'))
         .map(tr => Array.from(tr.querySelectorAll('td'))
-          .map(td => td.hasAttribute('height') ? 0 : 1)
+          .map(td => (td.hasAttribute('height') ? 0 : 1))
         );
     });
 

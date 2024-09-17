@@ -17,6 +17,5 @@ export function usePuzzleOptionsStringified (puzzleOptionsRef: Ref<PuzzleOptions
     ]`).join(',\n    ')},
   ],
 },`;
-
-  })
+  });
 }

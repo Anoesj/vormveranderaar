@@ -131,6 +131,7 @@ export class PossibleSolution {
     }
 
     console.log(
+      // eslint-disable-next-line prefer-template
       'Found solution!\n'
       + 'Sorted by brute force stacking order:\n'
       + this.parts.map(({ id, position }) => `${id} at ${position}`).join('\n')

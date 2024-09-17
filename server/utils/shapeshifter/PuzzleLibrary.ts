@@ -212,7 +212,7 @@ export const PuzzleLibrary = {
         [1],
       ],
       [
-        [1, 1]
+        [1, 1],
       ],
       [
         [1],

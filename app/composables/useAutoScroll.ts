@@ -4,7 +4,9 @@ export function useAutoScroll (speed = 60, initialValue = false) {
   let scrollAnimationId: number | null = null;
 
   watch(autoScrollEnabled, (newValue) => {
-    if (!import.meta.client) return;
+    if (!import.meta.client) {
+      return;
+    }
 
     if (newValue) {
       startAutoScroll(speed);
@@ -16,7 +18,7 @@ export function useAutoScroll (speed = 60, initialValue = false) {
     immediate: true,
   });
 
-  function startAutoScroll(pixelsPerSecond: number) {
+  function startAutoScroll (pixelsPerSecond: number) {
     let lastTime: number | null = null;
 
     function scrollStep (timestamp: number) {
@@ -43,7 +45,7 @@ export function useAutoScroll (speed = 60, initialValue = false) {
     document.addEventListener('keydown', cancelAutoScrollIfEsc, { passive: true });
   }
 
-  function stopAutoScroll() {
+  function stopAutoScroll () {
     if (scrollAnimationId !== null) {
       cancelAnimationFrame(scrollAnimationId);
       scrollAnimationId = null;
@@ -54,11 +56,11 @@ export function useAutoScroll (speed = 60, initialValue = false) {
     document.removeEventListener('keydown', cancelAutoScrollIfEsc);
   }
 
-  function cancelAutoScroll() {
+  function cancelAutoScroll () {
     autoScrollEnabled.value = false;
   }
 
-  function cancelAutoScrollIfEsc(event: KeyboardEvent) {
+  function cancelAutoScrollIfEsc (event: KeyboardEvent) {
     if (event.key === 'Escape') {
       cancelAutoScroll();
     }

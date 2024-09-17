@@ -1,24 +1,24 @@
 <script setup lang="ts">
-import { type HTMLAttributes, computed } from 'vue'
+import { type HTMLAttributes, computed } from 'vue';
 import {
   SelectItem,
   SelectItemIndicator,
   type SelectItemProps,
   SelectItemText,
   useForwardProps,
-} from 'radix-vue'
-import { Check } from 'lucide-vue-next'
-import { cn } from '@/utils/cn'
+} from 'radix-vue';
+import { Check } from 'lucide-vue-next';
+import { cn } from '@/utils/cn';
 
-const props = defineProps<SelectItemProps & { class?: HTMLAttributes['class'] }>()
+const props = defineProps<SelectItemProps & { class?: HTMLAttributes['class'] }>();
 
 const delegatedProps = computed(() => {
-  const { class: _, ...delegated } = props
+  const { class: _, ...delegated } = props;
 
-  return delegated
-})
+  return delegated;
+});
 
-const forwardedProps = useForwardProps(delegatedProps)
+const forwardedProps = useForwardProps(delegatedProps);
 </script>
 
 <template>
@@ -33,12 +33,12 @@ const forwardedProps = useForwardProps(delegatedProps)
   >
     <span class="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
       <SelectItemIndicator>
-        <Check class="h-4 w-4" />
+        <Check class="h-4 w-4"/>
       </SelectItemIndicator>
     </span>
 
     <SelectItemText>
-      <slot />
+      <slot></slot>
     </SelectItemText>
   </SelectItem>
 </template>

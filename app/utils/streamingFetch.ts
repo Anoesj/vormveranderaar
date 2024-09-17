@@ -17,7 +17,9 @@ export async function* streamingFetch (fetchCall: () => ReturnType<typeof fetch>
     const { done, value } = await reader.read();
 
     // Check if stream is done
-    if (done) break;
+    if (done) {
+      break;
+    }
 
     // Decodes data chunk and yields it
     yield textDecoder.decode(value);
