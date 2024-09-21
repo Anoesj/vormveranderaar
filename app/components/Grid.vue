@@ -12,10 +12,12 @@
       <td
         v-for="(colVal, colIndex) of row"
         :key="colIndex"
+        class="grid-cell"
         :class="[
           {
-            'puzzle-piece-active-cell': isPuzzlePieceGrid && colVal,
-            [`figure--${colVal}`]: !isPuzzlePieceGrid && !doShowFigures,
+            'grid-cell--puzzle-piece-active': isPuzzlePieceGrid && colVal,
+            [`grid-cell--figure--${colVal}`]: !isPuzzlePieceGrid && !doShowFigures,
+            'grid-cell--highlighted': highlightedPosition && colIndex === highlightedPosition.x && rowIndex === highlightedPosition.y,
           },
           `${doShowFigures && !isPuzzlePieceGrid ? 'border-transparent' : 'border-foreground'} border leading-none relative text-center`,
         ]"
@@ -39,12 +41,14 @@
 const {
   grid,
   isPuzzlePieceGrid = false,
+  highlightedPosition = undefined,
   replaceAllWith = undefined,
 } = defineProps<{
   grid: {
     data: unknown[][];
   };
   isPuzzlePieceGrid?: boolean;
+  highlightedPosition?: InstanceType<typeof Position>;
   replaceAllWith?: unknown;
 }>();
 
@@ -65,25 +69,47 @@ const gridData = computed(() => {
 });
 </script>
 
-<style>
+<style lang="scss" scoped>
 table {
-  &.grid--puzzle-piece td {
-    &.puzzle-piece-active-cell {
+  &.grid--puzzle-piece .grid-cell {
+    &--puzzle-piece-active {
       background-color: #c41a1e;
       color: white;
+
+      &.grid-cell--highlighted {
+        background-color: #a00003;
+
+        &::before {
+          background-color: transparent;
+        }
+      }
     }
   }
 
-  &:not(.grid--puzzle-piece) td {
-    &.figure--0 {
+  &:not(.grid--puzzle-piece) .grid-cell {
+    &--figure--0 {
       background-color: white;
     }
-    &.figure--1 {
-      background-color: rgb(219, 254, 186);
+    &--figure--1 {
+      background-color: hsl(91deg 97% 86%);
     }
+    &--figure--2 {
+      background-color: hsl(206deg 63% 79%);
+    }
+  }
 
-    &.figure--2 {
-      background-color: rgb(167, 205, 235);
+  .grid-cell {
+    &--highlighted {
+      position: relative;
+
+      &::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: 10000;
+        background-color: hsl(91deg 97% 86% / 15%);
+        outline: 3px solid hsl(91deg 97% 40%);
+      }
     }
   }
 }

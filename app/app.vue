@@ -27,7 +27,7 @@
           </Button>
         </CardContent>
 
-        <CardContent class="mt-[-1rem] pb-1">
+        <CardContent class="-mt-4 pb-1">
           <Separator
             class="my-4"
             label="Or"
@@ -56,7 +56,7 @@
           </Button>
         </CardContent>
 
-        <CardContent class="mt-[-1rem] pb-1">
+        <CardContent class="-mt-4 pb-1">
           <Separator
             class="my-4"
             label="Or"
@@ -116,7 +116,7 @@
       </Card>
 
       <Card class="grow shrink-0 w-[min(600px,100%-4rem)] bg-[#f8fafc]">
-        <CardHeader class="flex flex-row items-center justify-between gap-4">
+        <CardHeader class="flex flex-row items-start justify-between gap-4">
           <div class="flex gap-4">
             <div class="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-4">
               <Switch
@@ -137,7 +137,7 @@
                 :disabled="runtimeConfig.public.calculateInBrowserOnly"
               />
               <Label for="calculate-in-browser" class="leading-5">
-                Calculate in-browser (experimental)
+                Calculate in-browser
                 <br>
                 <span class="text-gray-400">
                   This will run the calculation in your browser instead of in the Bun-powered server.
@@ -159,7 +159,11 @@
             </div>
           </div>
 
-          <Settings class="text-[#c1c4c7] grow-0 shrink-0"/>
+          <Settings
+            class="text-[#dcdee0] grow-0 shrink-0"
+            :width="30"
+            :height="30"
+          />
         </CardHeader>
       </Card>
     </div>

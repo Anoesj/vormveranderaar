@@ -28,9 +28,10 @@
         </Label>
       </div>
 
-      <template
+      <div
         v-for="(part, index) of parts"
         :key="part.id"
+        class="pl-[2px]"
       >
         <h5 class="mt-4">
           {{ part.id }} at (x: {{ part.position.x }}, y: {{ part.position.y }}){{
@@ -45,14 +46,18 @@
             <Grid :grid="part.before!"/>
             <Plus/>
           </template>
-          <Grid :grid="part.grid" isPuzzlePieceGrid/>
+          <Grid
+            :grid="part.grid"
+            isPuzzlePieceGrid
+            :highlightedPosition="part.position"
+          />
           <template v-if="!isPrinting && !showSorted">
             <Equal/>
             <Grid :grid="part.after!"/>
             <span v-if="index === parts.length - 1" style="font-size: 1.5rem; margin-left: 0.5rem">✅</span>
           </template>
         </div>
-      </template>
+      </div>
     </div>
   </Details>
 </template>

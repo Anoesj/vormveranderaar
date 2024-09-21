@@ -20,16 +20,21 @@
       <p class="mt-4">ℹ️ <em>If this is the only displayed possible solution start, the preparation phase based on correct corner outputs is most likely disabled, and we just brute forced the puzzle from scratch.</em></p>
     </template>
     <template v-else>
-      <template
+      <div
         v-for="part of possibleSolutionStart.parts"
         :key="part.id"
+        class="pl-[2px]"
       >
         <h5>{{ part.id }} at (x: {{ part.position.x }}, y: {{ part.position.y }})</h5>
 
         <div class="f">
           <Grid :grid="part.before!"/>
           <Plus/>
-          <Grid :grid="part.grid" isPuzzlePieceGrid/>
+          <Grid
+            :grid="part.grid"
+            isPuzzlePieceGrid
+            :highlightedPosition="part.position"
+          />
           <Equal/>
           <Grid :grid="part.after!"/>
           <span
@@ -39,7 +44,7 @@
             {{ state.emoji }}
           </span>
         </div>
-      </template>
+      </div>
     </template>
   </Details>
 </template>
