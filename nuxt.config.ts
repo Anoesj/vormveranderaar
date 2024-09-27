@@ -10,7 +10,6 @@ export default defineNuxtConfig({
   },
   modules: [
     '@nuxt/test-utils/module',
-    '@nuxt/eslint',
     '@nuxtjs/tailwindcss',
     'shadcn-nuxt',
   ],
@@ -39,10 +38,10 @@ export default defineNuxtConfig({
   hooks: {
     'vite:extendConfig' (viteInlineConfig, env) {
       if (env.isClient) {
-        const importPlugin = viteInlineConfig.plugins?.find(p => p && 'name' in p && p.name === 'nuxt:imports-transform')
+        const importPlugin = viteInlineConfig.plugins?.find((p) => p && 'name' in p && p.name === 'nuxt:imports-transform');
         if (importPlugin) {
-          viteInlineConfig.worker ||= {}
-          viteInlineConfig.worker.plugins = () => [importPlugin]
+          viteInlineConfig.worker ||= {};
+          viteInlineConfig.worker.plugins = () => [importPlugin];
         }
       }
     },

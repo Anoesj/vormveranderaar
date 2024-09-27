@@ -3,13 +3,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "HOST=0.0.0.0 nuxt dev",
+    "dev": "nuxt dev",
     "build": "./scripts/build.sh",
     "build:netlify": "./scripts/build-netlify.sh",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "test": "vitest",
-    "test:once": "vitest run"
+    "test:once": "vitest run",
+    "lint": "eslint",
+    "lint:fix": "eslint --fix"
   },
   "dependencies": {
     "@nuxtjs/tailwindcss": "^6.12.1",
@@ -26,9 +28,7 @@
     "vee-validate": "^4.13.2"
   },
   "devDependencies": {
-    "@anoesj/eslint-config-anoesj": "github:anoesj/eslint-config-anoesj",
-    "@anoesj/eslint-config-anoesj-vue": "github:anoesj/eslint-config-anoesj-vue",
-    "@nuxt/eslint": "^0.5.5",
+    "@anoesj/eslint-config-vue-ts": "^0.2.9",
     "@nuxt/test-utils": "^3.14.1",
     "bun-types": "^1.1.26",
     "sass-embedded": "^1.78.0",
