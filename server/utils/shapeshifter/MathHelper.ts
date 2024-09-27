@@ -1,4 +1,3 @@
-// eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export class MathHelper {
   static sumReducer = (acc: number, val: number) => acc + val;
   static productReducer = (acc: number, val: number) => acc * val;

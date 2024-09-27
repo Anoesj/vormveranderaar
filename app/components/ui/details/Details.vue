@@ -21,47 +21,47 @@
 </template>
 
 <script setup lang="ts">
-import { Minus, Plus } from 'lucide-vue-next';
+  import { Minus, Plus } from 'lucide-vue-next';
 
-const {
-  open = false,
-  nested = false,
-  forceOpenOnPrint = false,
-} = defineProps<{
-  open?: boolean;
-  nested?: boolean;
-  forceOpenOnPrint?: boolean;
-}>();
+  const {
+    open = false,
+    nested = false,
+    forceOpenOnPrint = false,
+  } = defineProps<{
+    open?: boolean;
+    nested?: boolean;
+    forceOpenOnPrint?: boolean;
+  }>();
 
-const emit = defineEmits<{
-  toggle: [newState: boolean];
-}>();
+  const emit = defineEmits<{
+    toggle: [newState: boolean];
+  }>();
 
-const isOpen = ref(open);
+  const isOpen = ref(open);
 
-const isPrinting = inject(isPrintingKey)!;
+  const isPrinting = inject(isPrintingKey)!;
 
-function handleToggle (event: ToggleEvent) {
-  isOpen.value = event.newState === 'open';
-  emit('toggle', isOpen.value);
-}
+  function handleToggle (event: ToggleEvent) {
+    isOpen.value = event.newState === 'open';
+    emit('toggle', isOpen.value);
+  }
 
-watch(() => open, (newValue) => {
-  isOpen.value = newValue;
-});
+  watch(() => open, (newValue) => {
+    isOpen.value = newValue;
+  });
 
-if (import.meta.client && forceOpenOnPrint) {
-  let wasOpen: boolean | undefined;
+  if (import.meta.client && forceOpenOnPrint) {
+    let wasOpen: boolean | undefined;
 
-  watch(isPrinting, (newValue) => {
-    if (newValue) {
-      wasOpen = isOpen.value;
-      isOpen.value = true;
-    }
-    else {
-      isOpen.value = wasOpen as boolean;
-      wasOpen = undefined;
-    }
-  }, { flush: 'sync' });
-}
+    watch(isPrinting, (newValue) => {
+      if (newValue) {
+        wasOpen = isOpen.value;
+        isOpen.value = true;
+      }
+      else {
+        isOpen.value = wasOpen as boolean;
+        wasOpen = undefined;
+      }
+    }, { flush: 'sync' });
+  }
 </script>

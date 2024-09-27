@@ -22,7 +22,7 @@ export class PuzzlePiece {
 
   constructor (grid: GridLike<number>, id: string, gameBoard: GameBoard) {
     this.id = id;
-    this.grid = new Grid(grid.map(row => row.map(colValue => colValue)));
+    this.grid = new Grid(grid.map((row) => row.map((colValue) => colValue)));
     this.#gameBoard = gameBoard;
 
     this.cellsInfluenced = this.grid.data
@@ -111,7 +111,7 @@ export class PuzzlePiece {
       // it can avoid corners if it doesn't span the x or y axis,
       // because you can always move it some way away from the corner.
       || (
-        Object.values(activeCorners).some(val => val === false)
+        Object.values(activeCorners).some((val) => val === false)
         && !spansXAxis
         && !spansYAxis
       )

@@ -63,26 +63,26 @@
 </template>
 
 <script setup lang="ts">
-import { Plus, Equal } from 'lucide-vue-next';
+  import { Plus, Equal } from 'lucide-vue-next';
 
-const {
-  nth,
-  solution,
-} = defineProps<{
-  nth: number;
-  only: boolean;
-  solution: InstanceType<typeof PossibleSolution>;
-}>();
+  const {
+    nth,
+    solution,
+  } = defineProps<{
+    nth: number;
+    only: boolean;
+    solution: InstanceType<typeof PossibleSolution>;
+  }>();
 
-const isPrinting = inject(isPrintingKey)!;
+  const isPrinting = inject(isPrintingKey)!;
 
-const showSorted = ref(true);
-const autoScroll = useAutoScroll(40);
+  const showSorted = ref(true);
+  const autoScroll = useAutoScroll(40);
 
-const sortCheckboxId = computed(() => useId());
-const autoScrollCheckboxId = computed(() => useId());
+  const sortCheckboxId = computed(() => useId());
+  const autoScrollCheckboxId = computed(() => useId());
 
-const parts = computed(() => (showSorted.value
-  ? solution.parts.toSorted((a, b) => a.id.localeCompare(b.id, 'nl-NL'))
-  : solution.parts));
+  const parts = computed(() => (showSorted.value
+    ? solution.parts.toSorted((a, b) => a.id.localeCompare(b.id, 'nl-NL'))
+    : solution.parts));
 </script>

@@ -7,13 +7,13 @@ export function usePuzzleOptionsStringified (puzzleOptionsRef: Ref<PuzzleOptions
     const { figures, gameBoard, puzzlePieces } = puzzleOptionsRef.value;
 
     return `{
-  figures: [${figures.map(f => `'${f}'`).join(', ')}],
+  figures: [${figures.map((f) => `'${f}'`).join(', ')}],
   gameBoard: [
-    ${gameBoard.map(row => `[${row.join(', ')}]`).join(',\n    ')},
+    ${gameBoard.map((row) => `[${row.join(', ')}]`).join(',\n    ')},
   ],
   puzzlePieces: [
-    ${puzzlePieces.map(piece => `[
-      ${piece.map(row => `[${row.join(', ')}],`).join('\n      ')}
+    ${puzzlePieces.map((piece) => `[
+      ${piece.map((row) => `[${row.join(', ')}],`).join('\n      ')}
     ]`).join(',\n    ')},
   ],
 },`;

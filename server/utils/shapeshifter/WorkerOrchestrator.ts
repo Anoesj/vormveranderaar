@@ -1,3 +1,6 @@
+/* eslint-disable -- Not using this file right now */
+// @ts-nocheck
+
 // import ShapeshifterIteratorWorker from '@/utils/shapeshifterWorker?worker';
 
 /**

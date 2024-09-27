@@ -141,10 +141,10 @@ export class GameBoard extends Grid {
 
     return {
       focusArea: invalidCellsArea as {
-        x1: number,
-        x2: number,
-        y1: number,
-        y2: number
+        x1: number;
+        x2: number;
+        y1: number;
+        y2: number;
       },
     };
   }
@@ -155,6 +155,6 @@ export class GameBoard extends Grid {
   }
 
   toShortString () {
-    return this.data.map(row => row.join('')).join('');
+    return this.data.map((row) => row.join('')).join('');
   }
 }

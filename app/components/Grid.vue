@@ -38,35 +38,35 @@
 </template>
 
 <script setup lang="ts">
-const {
-  grid,
-  isPuzzlePieceGrid = false,
-  highlightedPosition = undefined,
-  replaceAllWith = undefined,
-} = defineProps<{
-  grid: {
-    data: unknown[][];
-  };
-  isPuzzlePieceGrid?: boolean;
-  highlightedPosition?: InstanceType<typeof Position>;
-  replaceAllWith?: unknown;
-}>();
+  const {
+    grid,
+    isPuzzlePieceGrid = false,
+    highlightedPosition = undefined,
+    replaceAllWith = undefined,
+  } = defineProps<{
+    grid: {
+      data: unknown[][];
+    };
+    isPuzzlePieceGrid?: boolean;
+    highlightedPosition?: InstanceType<typeof Position>;
+    replaceAllWith?: unknown;
+  }>();
 
-const result = inject(resultKey)!;
-const doShowFigures = inject(doShowFiguresKey)!;
+  const result = inject(resultKey)!;
+  const doShowFigures = inject(doShowFiguresKey)!;
 
-function imgSrc (value: number) {
-  return result.value!.figures[value]!.name as string;
-}
-
-const gridData = computed(() => {
-  if (replaceAllWith === undefined) {
-    return grid.data;
+  function imgSrc (value: number) {
+    return result.value!.figures[value]!.name as string;
   }
-  else {
-    return grid.data.map(row => row.map((_cell) => replaceAllWith));
-  }
-});
+
+  const gridData = computed(() => {
+    if (replaceAllWith === undefined) {
+      return grid.data;
+    }
+    else {
+      return grid.data.map((row) => row.map((_cell) => replaceAllWith));
+    }
+  });
 </script>
 
 <style lang="scss" scoped>

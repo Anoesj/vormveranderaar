@@ -47,15 +47,15 @@
 </template>
 
 <script setup lang="ts">
-interface Option {
-  value: string;
-  label: string;
-  description?: string;
-}
+  interface Option {
+    value: string;
+    label: string;
+    description?: string;
+  }
 
-defineProps<{
-  options: Option[];
-}>();
+  defineProps<{
+    options: Option[];
+  }>();
 
-const modelValue = defineModel<string>({ required: true });
+  const modelValue = defineModel<string>({ required: true });
 </script>

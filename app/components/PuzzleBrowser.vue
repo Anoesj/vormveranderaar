@@ -3,6 +3,7 @@
     <DialogTrigger asChild>
       <slot name="trigger"></slot>
     </DialogTrigger>
+    <!-- eslint-disable-next-line vue/max-len -->
     <DialogContent class="max-w-[1200px] p-0 grid-rows-[auto_minmax(0,1fr)_auto] max-sm:w-[calc(100dvw-3rem)] max-sm:max-h-[calc(100dvh-3rem)] sm:w-max sm:max-h-[calc(100dvh-6rem)]">
       <DialogHeader class="p-6 pb-0">
         <DialogTitle>Browse puzzles</DialogTitle>
@@ -16,6 +17,7 @@
           :options="entries(SelectablePuzzleLibrary).map(([key, puzzle]) => ({
             value: key,
             label: 'name' in puzzle ? (puzzle.name as string) : key,
+            // eslint-disable-next-line vue/max-len
             description: `${puzzle.gameBoard[0]!.length}x${puzzle.gameBoard.length} game board • ${puzzle.figures.length} symbols • ${puzzle.puzzlePieces.length} puzzle pieces`,
           }))"
         />
@@ -25,7 +27,9 @@
           <Button
             type="button"
             variant="secondary"
-          >Cancel</Button>
+          >
+            Cancel
+          </Button>
         </DialogClose>
 
         <DialogClose asChild>
@@ -44,19 +48,19 @@
 </template>
 
 <script lang="ts" setup>
-import { useLocalStorage } from '@vueuse/core';
-import { Calculator } from 'lucide-vue-next';
+  import { useLocalStorage } from '@vueuse/core';
+  import { Calculator } from 'lucide-vue-next';
 
-defineEmits<{
-  submit: [payload: PuzzleOptions];
-}>();
+  defineEmits<{
+    submit: [payload: PuzzleOptions];
+  }>();
 
-const selectablePuzzleIds = keys(SelectablePuzzleLibrary);
-const defaultSelectedPuzzle = selectablePuzzleIds[0]!;
+  const selectablePuzzleIds = keys(SelectablePuzzleLibrary);
+  const defaultSelectedPuzzle = selectablePuzzleIds[0]!;
 
-const selectedPuzzle = useLocalStorage<typeof selectablePuzzleIds[number]>('puzzleBrowserSelectedPuzzle', defaultSelectedPuzzle);
+  const selectedPuzzle = useLocalStorage<typeof selectablePuzzleIds[number]>('puzzleBrowserSelectedPuzzle', defaultSelectedPuzzle);
 
-if (!selectablePuzzleIds.includes(selectedPuzzle.value)) {
-  selectedPuzzle.value = defaultSelectedPuzzle;
-}
+  if (!selectablePuzzleIds.includes(selectedPuzzle.value)) {
+    selectedPuzzle.value = defaultSelectedPuzzle;
+  }
 </script>

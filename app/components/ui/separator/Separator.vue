@@ -1,27 +1,28 @@
 <script setup lang="ts">
-import { type HTMLAttributes, computed } from 'vue';
-import { Separator, type SeparatorProps } from 'radix-vue';
-import { cn } from '@/utils/cn';
+  import { type HTMLAttributes, computed } from 'vue';
+  import { Separator, type SeparatorProps } from 'radix-vue';
+  import { cn } from '@/utils/cn';
 
-const props = defineProps<
-  SeparatorProps & {
-    class?: HTMLAttributes['class'],
-    label?: string,
-    labelClass?: HTMLAttributes['class'],
-  }
->();
+  const props = defineProps<
+    SeparatorProps & {
+      class?: HTMLAttributes['class'];
+      label?: string;
+      labelClass?: HTMLAttributes['class'];
+    }
+  >();
 
-const delegatedProps = computed(() => {
-  const {
-    class: _,
-    labelClass: __,
-    ...delegated
-  } = props;
+  const delegatedProps = computed(() => {
+    const {
+      class: _,
+      labelClass: __,
+      ...delegated
+    } = props;
 
-  return delegated;
-});
+    return delegated;
+  });
 </script>
 
+<!-- eslint-disable vue/max-len -->
 <template>
   <Separator
     v-bind="delegatedProps"

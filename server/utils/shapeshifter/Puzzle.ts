@@ -64,8 +64,9 @@ export class Puzzle {
   /**
    * The number of cells that can be influenced from every number of puzzle pieces left.
    */
-  #maxCellsInfluencedPerPuzzlePiecesLeft: Map<number, number> = new Map;
+  #maxCellsInfluencedPerPuzzlePiecesLeft: Map<number, number> = new Map();
 
+  /* eslint-disable @stylistic/indent */
   meta: {
     totalNumberOfPossibleCombinations: number;
     totalNumberOfTriedCombinations: number;
@@ -109,15 +110,16 @@ export class Puzzle {
     tEnd: null,
     tLastStillThinkingLog: null,
   };
+  /* eslint-enable @stylistic/indent */
 
   #perf = {
-    toEmptyGameBoardWithPuzzlePieceAt: new PerfStat,
-    gameBoardClone: new PerfStat,
-    gameBoardStack: new PerfStat,
-    possibleSolutionClone: new PerfStat,
-    countNumberOfTransformsNeeded: new PerfStat,
-    countNumberOfTransformsNeeded2: new PerfStat,
-    getNextPuzzlePiecesMaxInfluencedCells: new PerfStat,
+    toEmptyGameBoardWithPuzzlePieceAt: new PerfStat(),
+    gameBoardClone: new PerfStat(),
+    gameBoardStack: new PerfStat(),
+    possibleSolutionClone: new PerfStat(),
+    countNumberOfTransformsNeeded: new PerfStat(),
+    countNumberOfTransformsNeeded2: new PerfStat(),
+    getNextPuzzlePiecesMaxInfluencedCells: new PerfStat(),
   };
 
   constructor (options: {
@@ -136,7 +138,7 @@ export class Puzzle {
     this.targetFigure = this.figures.at(-1)!.value;
 
     this.gameBoard = new GameBoard(options.gameBoard);
-    this.gameBoardCompleted = new GameBoard(options.gameBoard.map(row => row.map(_ => this.targetFigure)));
+    this.gameBoardCompleted = new GameBoard(options.gameBoard.map((row) => row.map((_) => this.targetFigure)));
     this.gameBoardCompletedSum = this.gameBoardCompleted.sum();
 
     for (const [i, puzzlePieceGrid] of options.puzzlePieces.entries()) {
@@ -150,10 +152,11 @@ export class Puzzle {
 
     const puzzlePieces = Object.values(this.puzzlePieces);
 
-    console.log('\nFigures:', this.figures.map(f => f.toString()).join(', '));
+    console.log('\nFigures:', this.figures.map((f) => f.toString()).join(', '));
     console.log('\nGame board:', this.gameBoard.toString());
     console.log('\nPuzzle pieces:');
     for (const puzzlePiece of puzzlePieces) {
+      // eslint-disable-next-line @stylistic/max-len
       console.log(`\n${puzzlePiece.id} (${puzzlePiece.possiblePositions.length} possible positions, ${puzzlePiece.cellsInfluenced} cells influenced):`);
       console.log(puzzlePiece.grid.toString());
     }
@@ -164,7 +167,7 @@ export class Puzzle {
       .filter((p) => !p.canAvoidAffectingSomeCorners)
       .map((p) => p.id);
 
-    this.meta.totalNumberOfPossibleCombinations = MathHelper.product(puzzlePieces.map(p => p.possiblePositions.length));
+    this.meta.totalNumberOfPossibleCombinations = MathHelper.product(puzzlePieces.map((p) => p.possiblePositions.length));
 
     this.meta.returningMaxOneSolution = this.meta.totalNumberOfPossibleCombinations > 1_000_000;
 
@@ -432,7 +435,7 @@ export class Puzzle {
     possibleSolutionStarts = this.possibleSolutionStarts,
     from = 0,
     to,
-  } : {
+  }: {
     possibleSolutionStarts?: PossibleSolution[];
     from?: number;
     to?: number;
@@ -466,8 +469,10 @@ export class Puzzle {
         unusedPuzzlePiecesPossibleCombinations,
       } = possibleSolutionStart.getContinuationInfo(puzzlePieces, this.#hasPreparedSolutionStarts);
 
+      // eslint-disable-next-line @stylistic/max-len
       console.log(`\nBrute forcing from possible solution start #${i + 1}/${possibleSolutionStartsCount} (${numberFormatter.format(unusedPuzzlePiecesPossibleCombinations)} possible combinations)`);
-      console.log('Unused puzzle pieces:', unusedPuzzlePiecesCount === 0 ? '-' : `${unusedPuzzlePiecesCount} (${unusedPuzzlePiecesPlacementOptions.map(p => p.puzzlePiece.id).join(', ')})`);
+      // eslint-disable-next-line @stylistic/max-len
+      console.log('Unused puzzle pieces:', unusedPuzzlePiecesCount === 0 ? '-' : `${unusedPuzzlePiecesCount} (${unusedPuzzlePiecesPlacementOptions.map((p) => p.puzzlePiece.id).join(', ')})`);
 
       // If possible solution consist of no possible solution parts,
       // the solution is: do nothing. In that case, the grid after all changes
@@ -499,7 +504,7 @@ export class Puzzle {
 
       const gameBoard = gameBoardSoFar.clone();
 
-      const shouldAbort = this.#calculatedSameSituationBefore(unusedPuzzlePiecesPlacementOptions.map(p => p.puzzlePiece), gameBoard);
+      const shouldAbort = this.#calculatedSameSituationBefore(unusedPuzzlePiecesPlacementOptions.map((p) => p.puzzlePiece), gameBoard);
 
       if (shouldAbort) {
         console.log(`Had the same grid with the same unused puzzle pieces before, skipping this entire possible solution start.`);
@@ -545,7 +550,7 @@ export class Puzzle {
     this.#finalize();
   }
 
-  *#puzzlePiecePlacementOptionsIterator ({
+  * #puzzlePiecePlacementOptionsIterator ({
     gameBoard,
     baseSolution,
     current,
@@ -598,6 +603,7 @@ export class Puzzle {
 
         const timePassed = now - this.#timings.tStart;
 
+        /* eslint-disable @stylistic/max-len */
         const msg = (
           'Still thinking...'
           + `\nNumber of puzzle piece placement attempts so far: ${numberFormatter.format(this.meta.totalNumberOfIteratorPlacementAttempts)}`
@@ -607,6 +613,7 @@ export class Puzzle {
           + `\nTime passed: ${this.#milliSecondsToString(timePassed)}`
           + `\nThroughput: ${numberFormatter.format(Math.round(this.meta.skippedImpossibleSituations / (timePassed / 1000)))} situations per second`
         );
+        /* eslint-enable @stylistic/max-len */
 
         console.log(msg);
 
@@ -736,7 +743,7 @@ export class Puzzle {
     // IDEA: Represent every puzzle piece using a binary code. The number of bits should be equal to the number of puzzle pieces.
     // Then we can create a bitmask that represents which puzzle pieces have been used and which ones haven't.
 
-    const key = `${puzzlePieces.map(p => p.id).join('')}${gameBoard.toShortString()}`;
+    const key = `${puzzlePieces.map((p) => p.id).join('')}${gameBoard.toShortString()}`;
 
     if (this.#uniqueSituations.has(key)) {
       return true;
@@ -768,6 +775,7 @@ export class Puzzle {
   }
 
   #logTimeToBruteForce () {
+    // eslint-disable-next-line @stylistic/max-len
     console.log('Time to brute force the puzzle:', this.#milliSecondsToString(this.#timings.tBruteForceEnd! - this.#timings.tBruteForceStart!));
   }
 
@@ -1051,7 +1059,8 @@ export class Puzzle {
   #saveAdditionalMeta () {
     this.#timings.tEnd = performance.now();
     this.meta.calculationDuration = this.#timings.tEnd - this.#timings.tStart;
-    this.meta.percentageOfPossibleCombinationsTried = this.meta.skippedImpossibleSituations / this.meta.totalNumberOfPossibleCombinations * 100;
+    this.meta.percentageOfPossibleCombinationsTried =
+      this.meta.skippedImpossibleSituations / this.meta.totalNumberOfPossibleCombinations * 100;
     this.meta.throughput = Math.round(this.meta.skippedImpossibleSituations / (this.meta.calculationDuration / 1000));
   }
 }

@@ -110,7 +110,8 @@ export class PossibleSolution {
         possiblePositions: puzzlePiece.getPossiblePositions(avoidCorners),
       }));
 
-    const unusedPuzzlePiecesPossibleCombinations = MathHelper.product(unusedPuzzlePiecesPlacementOptions.map(p => p.possiblePositions.length));
+    const unusedPuzzlePiecesPossibleCombinations =
+      MathHelper.product(unusedPuzzlePiecesPlacementOptions.map((p) => p.possiblePositions.length));
 
     this.continuationInfo = {
       unusedPuzzlePiecesPlacementOptions,

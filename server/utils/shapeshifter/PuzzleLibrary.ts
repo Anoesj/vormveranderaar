@@ -2051,7 +2051,7 @@ export const PuzzleLibrary = {
 } as const satisfies Record<string, PuzzleOptions & { hide: boolean; name?: string; }>;
 
 // Helper type to exclude puzzles with `hide: true`
-type ExcludeHidden<T extends Record<string, { hide: boolean }>> = {
+type ExcludeHidden<T extends Record<string, { hide: boolean; }>> = {
   [K in keyof T as T[K]['hide'] extends true ? never : K]: T[K];
 } & {};
 

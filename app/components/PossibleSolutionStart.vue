@@ -50,49 +50,49 @@
 </template>
 
 <script setup lang="ts">
-import type { PossibleSolution } from '#build/types/nitro-imports';
-import { Plus, Equal } from 'lucide-vue-next';
+  import type { PossibleSolution } from '#build/types/nitro-imports';
+  import { Plus, Equal } from 'lucide-vue-next';
 
-const {
-  possibleSolutionStart,
-  totalPuzzlePiecesCount,
-} = defineProps<{
-  nth: number;
-  possibleSolutionStart: PossibleSolution;
-  totalPuzzlePiecesCount: number;
-}>();
+  const {
+    possibleSolutionStart,
+    totalPuzzlePiecesCount,
+  } = defineProps<{
+    nth: number;
+    possibleSolutionStart: PossibleSolution;
+    totalPuzzlePiecesCount: number;
+  }>();
 
-const puzzlePiecesUsedCount = computed(() => possibleSolutionStart.parts.length);
+  const puzzlePiecesUsedCount = computed(() => possibleSolutionStart.parts.length);
 
-const state = computed(() => {
-  if (puzzlePiecesUsedCount.value !== totalPuzzlePiecesCount) {
+  const state = computed(() => {
+    if (puzzlePiecesUsedCount.value !== totalPuzzlePiecesCount) {
+      return {
+        type: 'incomplete',
+        emoji: '⏳',
+        explanation: 'incomplete, needs brute force',
+      };
+    }
+
+    if (puzzlePiecesUsedCount.value === 0) {
+      return {
+        type: 'unknown',
+        emoji: '❓',
+        explanation: 'state unknown',
+      };
+    }
+
+    if (possibleSolutionStart.parts.at(-1)!.after!.isSolution) {
+      return {
+        type: 'solution',
+        emoji: '✅',
+        explanation: 'solution',
+      };
+    }
+
     return {
-      type: 'incomplete',
-      emoji: '⏳',
-      explanation: 'incomplete, needs brute force',
+      type: 'no-solution',
+      emoji: '❌',
+      explanation: 'no solutions possible',
     };
-  }
-
-  if (puzzlePiecesUsedCount.value === 0) {
-    return {
-      type: 'unknown',
-      emoji: '❓',
-      explanation: 'state unknown',
-    };
-  }
-
-  if (possibleSolutionStart.parts.at(-1)!.after!.isSolution) {
-    return {
-      type: 'solution',
-      emoji: '✅',
-      explanation: 'solution',
-    };
-  }
-
-  return {
-    type: 'no-solution',
-    emoji: '❌',
-    explanation: 'no solutions possible',
-  };
-});
+  });
 </script>

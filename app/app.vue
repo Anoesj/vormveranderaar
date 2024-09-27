@@ -195,6 +195,7 @@
           <div class="flex gap-8 flex-wrap">
             <div class="grow shrink-0 w-[min(400px,100%-4rem)]">
               <h2>Info</h2>
+              <!-- eslint-disable-next-line vue/max-len -->
               <p>{{ result.solutions.length > 0 ? '✅' : '❌' }} <strong>{{ result.solutions.length > 0 ? `${result.solutions.length} solution${result.solutions.length > 1 ? 's' : ''} found` : 'no solution found' }}</strong></p>
               <p>ℹ️ <strong>{{ result.meta.returningMaxOneSolution ? 'Maximum of one solution returned for better performance' : 'Looked for all possible solutions' }}</strong></p>
               <p>⏱️ <strong>{{ formatDuration(result.meta.calculationDuration) }}</strong> to calculate the situation</p>
@@ -206,15 +207,19 @@
               <p><strong>{{ numberFormatter.format(result.meta.totalNumberOfTriedCombinations) }}</strong> probable solutions validated</p>
               <p><strong>{{ numberFormatter.format(result.meta.skippedDuplicateSituations) }}</strong> combinations skipped due to duplicate situations</p>
               <p><strong>{{ numberFormatter.format(result.meta.skippedImpossibleSituations) }}</strong> combinations skipped due to impossible situations</p>
-              <p><strong>{{
-                result.meta.percentageOfPossibleCombinationsTried < 0.01 ? '< 0.01' : numberFormatter.format(result.meta.percentageOfPossibleCombinationsTried)
-              }}%</strong> of all possible combinations tried until solution was found{{
-                result.meta.percentageOfPossibleCombinationsTried < 1
-                  ? ' 🍀'
-                  : (result.meta.percentageOfPossibleCombinationsTried > 85 && result.meta.calculationDuration > 60_000 * 2)
-                    ? ' 🤕'
-                    : ''
-              }}</p>
+              <p>
+                <strong>{{
+                  result.meta.percentageOfPossibleCombinationsTried < 0.01
+                    ? '< 0.01'
+                    : numberFormatter.format(result.meta.percentageOfPossibleCombinationsTried)
+                }}%</strong> of all possible combinations tried until solution was found{{
+                  result.meta.percentageOfPossibleCombinationsTried < 1
+                    ? ' 🍀'
+                    : (result.meta.percentageOfPossibleCombinationsTried > 85 && result.meta.calculationDuration > 60_000 * 2)
+                      ? ' 🤕'
+                      : ''
+                }}
+              </p>
               <p>Throughput: <strong>{{ numberFormatter.format(result.meta.throughput) }} Hz</strong> (combinations per second)</p>
             </div>
             <div class="grow shrink-0 w-[min(400px,100%-4rem)] overflow-x-auto">
@@ -329,223 +334,223 @@
 </template>
 
 <script setup lang="ts">
-import { useLocalStorage } from '@vueuse/core';
-import {
-  ArrowRight,
-  BadgeCheck,
-  CircleDashed,
-  ClipboardPaste,
-  Copy,
-  Dices,
-  Printer,
-  Puzzle as PuzzleIcon,
-  Settings,
-  X,
-} from 'lucide-vue-next';
-import ShapeshifterWorker from '@/utils/shapeshifterWorker?worker';
+  import { useLocalStorage } from '@vueuse/core';
+  import {
+    ArrowRight,
+    BadgeCheck,
+    CircleDashed,
+    ClipboardPaste,
+    Copy,
+    Dices,
+    Printer,
+    Puzzle as PuzzleIcon,
+    Settings,
+    X,
+  } from 'lucide-vue-next';
+  import ShapeshifterWorker from '@/utils/shapeshifterWorker?worker';
 
-const runtimeConfig = useRuntimeConfig();
+  const runtimeConfig = useRuntimeConfig();
 
-type InputType = 'html' | 'input' | 'example';
+  type InputType = 'html' | 'input' | 'example';
 
-const result = ref<InstanceType<typeof Puzzle>>();
-const resultHash = ref<string>();
-const pending = ref<false | InputType>(false);
-const error = ref<string>();
-const status = ref<string>();
+  const result = ref<InstanceType<typeof Puzzle>>();
+  const resultHash = ref<string>();
+  const pending = ref<false | InputType>(false);
+  const error = ref<string>();
+  const status = ref<string>();
 
-const isPrinting = shallowRef(false);
+  const isPrinting = shallowRef(false);
 
-const showFigures = useLocalStorage('showFigures', true);
-const calculateInBrowser = useLocalStorage('calculateInBrowser', true);
-const preparePossibleSolutionStarts = useLocalStorage('preparePossibleSolutionStarts', false);
+  const showFigures = useLocalStorage('showFigures', true);
+  const calculateInBrowser = useLocalStorage('calculateInBrowser', true);
+  const preparePossibleSolutionStarts = useLocalStorage('preparePossibleSolutionStarts', false);
 
-const puzzleOptions = shallowRef<PuzzleOptions>();
-const puzzleOptionsStringified = usePuzzleOptionsStringified(puzzleOptions);
+  const puzzleOptions = shallowRef<PuzzleOptions>();
+  const puzzleOptionsStringified = usePuzzleOptionsStringified(puzzleOptions);
 
-const figuresNamesAreUrls = computed(() => result.value?.figures
-  .every(figure => typeof figure.name === 'string' && figure.name.startsWith('http')) ?? false);
+  const figuresNamesAreUrls = computed(() => result.value?.figures
+    .every((figure) => typeof figure.name === 'string' && figure.name.startsWith('http')) ?? false);
 
-const doShowFigures = computed(() => showFigures.value && figuresNamesAreUrls.value);
+  const doShowFigures = computed(() => showFigures.value && figuresNamesAreUrls.value);
 
-provide(showFiguresKey, showFigures);
-provide(doShowFiguresKey, doShowFigures);
-provide(resultKey, result);
-provide(isPrintingKey, isPrinting);
+  provide(showFiguresKey, showFigures);
+  provide(doShowFiguresKey, doShowFigures);
+  provide(resultKey, result);
+  provide(isPrintingKey, isPrinting);
 
-async function getClipboardContents (inputType: Exclude<InputType, 'example'>) {
-  try {
-    const text = await navigator.clipboard.readText();
+  async function getClipboardContents (inputType: Exclude<InputType, 'example'>) {
+    try {
+      const text = await navigator.clipboard.readText();
 
-    puzzleOptions.value = inputType === 'html'
-      ? parseNeopetsHtml(text)
-      : Function(`"use strict"; return (${text.endsWith(',') ? text.slice(0, -1) : text})`)() as PuzzleOptions;
+      puzzleOptions.value = inputType === 'html'
+        ? parseNeopetsHtml(text)
+        : Function(`"use strict"; return (${text.endsWith(',') ? text.slice(0, -1) : text})`)() as PuzzleOptions;
 
-    calculate(inputType, puzzleOptions.value);
+      calculate(inputType, puzzleOptions.value);
+    }
+    catch (err) {
+      console.error('Failed to calculate from clipboard contents', err);
+    }
   }
-  catch (err) {
-    console.error('Failed to calculate from clipboard contents', err);
-  }
-}
 
-async function copyToClipboard () {
-  try {
-    await navigator.clipboard.writeText(puzzleOptionsStringified.value);
+  async function copyToClipboard () {
+    try {
+      await navigator.clipboard.writeText(puzzleOptionsStringified.value);
+    }
+    catch (err) {
+      console.error('Failed to copy to clipboard', err);
+    }
   }
-  catch (err) {
-    console.error('Failed to copy to clipboard', err);
-  }
-}
 
-let shapeshifterWorker: InstanceType<typeof ShapeshifterWorker>;
+  let shapeshifterWorker: InstanceType<typeof ShapeshifterWorker>;
 
-watch(calculateInBrowser, (value) => {
-  if (value) {
+  watch(calculateInBrowser, (value) => {
+    if (value) {
+      shapeshifterWorker = new ShapeshifterWorker();
+    }
+    else {
+      shapeshifterWorker?.terminate();
+    }
+  }, { immediate: true });
+
+  function restartShapeshifterWorker () {
+    shapeshifterWorker?.terminate();
     shapeshifterWorker = new ShapeshifterWorker();
   }
-  else {
-    shapeshifterWorker?.terminate();
+
+  let controller: AbortController;
+
+  let wakeLock: WakeLockSentinel | null = null;
+
+  function logWakeLockState () {
+    console.log(`Screen Wake Lock ${wakeLock!.released ? 'released' : 'active'}`);
   }
-}, { immediate: true });
 
-function restartShapeshifterWorker () {
-  shapeshifterWorker?.terminate();
-  shapeshifterWorker = new ShapeshifterWorker();
-}
+  async function calculate (inputType: InputType, payload: PuzzleOptions) {
+    error.value = undefined;
+    pending.value = inputType;
 
-let controller: AbortController;
+    wakeLock = await navigator.wakeLock.request();
+    wakeLock.addEventListener('release', logWakeLockState, { once: true });
+    logWakeLockState();
 
-let wakeLock: WakeLockSentinel | null = null;
+    const cleanUp = () => {
+      wakeLock?.release();
+      wakeLock = null;
+    };
 
-function logWakeLockState () {
-  console.log(`Screen Wake Lock ${wakeLock!.released ? 'released' : 'active'}`);
-}
+    // NOTE: Unfortunately, canceling a request does not stop the calculation in the backend.
+    // You can't solve it at all, even with WebSockets/SSE. What a great day.
+    controller = new AbortController();
+    controller.signal.addEventListener('abort', () => {
+      pending.value = false;
+      cleanUp();
 
-async function calculate (inputType: InputType, payload: PuzzleOptions) {
-  error.value = undefined;
-  pending.value = inputType;
+      if (calculateInBrowser.value) {
+        restartShapeshifterWorker();
+      }
+    });
 
-  wakeLock = await navigator.wakeLock.request();
-  wakeLock.addEventListener('release', logWakeLockState, { once: true });
-  logWakeLockState();
-
-  const cleanUp = () => {
-    wakeLock?.release();
-    wakeLock = null;
-  };
-
-  // NOTE: Unfortunately, canceling a request does not stop the calculation in the backend.
-  // You can't solve it at all, even with WebSockets/SSE. What a great day.
-  controller = new AbortController();
-  controller.signal.addEventListener('abort', () => {
-    pending.value = false;
-    cleanUp();
+    let response: InstanceType<typeof Puzzle> | undefined;
 
     if (calculateInBrowser.value) {
-      restartShapeshifterWorker();
-    }
-  });
+      try {
+        response = await new Promise<InstanceType<typeof Puzzle>>((resolve, reject) => {
+          shapeshifterWorker.onmessage = (event) => {
+            const { type, payload } = event.data as {
+              type: 'status-update';
+              payload: string;
+            } | {
+              type: 'finished';
+              payload: InstanceType<typeof Puzzle>;
+            };
 
-  let response: InstanceType<typeof Puzzle> | undefined;
-
-  if (calculateInBrowser.value) {
-    try {
-      response = await new Promise<InstanceType<typeof Puzzle>>((resolve, reject) => {
-        shapeshifterWorker.onmessage = (event) => {
-          const { type, payload } = event.data as {
-            type: 'status-update',
-            payload: string;
-          } | {
-            type: 'finished',
-            payload: InstanceType<typeof Puzzle>;
+            if (type === 'finished') {
+              resolve(payload);
+              status.value = undefined;
+            }
+            else {
+              status.value = payload;
+            }
           };
 
-          if (type === 'finished') {
-            resolve(payload);
+          shapeshifterWorker.onerror = (event) => {
             status.value = undefined;
-          }
-          else {
-            status.value = payload;
-          }
-        };
+            reject(event);
+          };
 
-        shapeshifterWorker.onerror = (event) => {
-          status.value = undefined;
-          reject(event);
-        };
-
-        shapeshifterWorker.postMessage({
-          type: 'calculate',
-          payload: payload,
-          settings: {
-            preparePossibleSolutionStarts: preparePossibleSolutionStarts.value,
-          },
+          shapeshifterWorker.postMessage({
+            type: 'calculate',
+            payload: payload,
+            settings: {
+              preparePossibleSolutionStarts: preparePossibleSolutionStarts.value,
+            },
+          });
         });
-      });
+      }
+      catch (err) {
+        error.value = (err as Error).toString();
+        result.value = undefined;
+        cleanUp();
+        throw err;
+      }
     }
-    catch (err) {
-      error.value = (err as Error).toString();
-      result.value = undefined;
-      cleanUp();
-      throw err;
+    else {
+      try {
+        response = await $fetch<InstanceType<typeof Puzzle>>('/api/calculate-solutions', {
+          method: 'POST',
+          timeout: 0,
+          retry: 0,
+          retryDelay: 0,
+          signal: controller.signal,
+          ...(payload ? { body: payload } : {}),
+        });
+      }
+      catch (err) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        error.value = JSON.stringify((err as any).data.data, null, 2);
+        result.value = undefined;
+        cleanUp();
+        throw err;
+      }
     }
+
+    resultHash.value = await hashObject(response!);
+    result.value = response;
+    pending.value = false;
+    cleanUp();
   }
-  else {
-    try {
-      response = await $fetch<InstanceType<typeof Puzzle>>('/api/calculate-solutions', {
-        method: 'POST',
-        timeout: 0,
-        retry: 0,
-        retryDelay: 0,
-        signal: controller.signal,
-        ...(payload ? { body: payload } : {}),
-      });
-    }
-    catch (err) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      error.value = JSON.stringify((err as any).data.data, null, 2);
-      result.value = undefined;
-      cleanUp();
-      throw err;
-    }
+
+  function cancel () {
+    console.log('Canceling calculation');
+    controller?.abort('User canceled');
   }
 
-  resultHash.value = await hashObject(response!);
-  result.value = response;
-  pending.value = false;
-  cleanUp();
-}
+  async function print () {
+    isPrinting.value = true;
+    await nextTick();
+    window.print();
+    isPrinting.value = false;
+  }
 
-function cancel () {
-  console.log('Canceling calculation');
-  controller?.abort('User canceled');
-}
+  // <link rel="preconnect" href="https://fonts.googleapis.com">
+  // <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  // <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:ital,wght@0,100..700;1,100..700&display=swap" rel="stylesheet">
 
-async function print () {
-  isPrinting.value = true;
-  await nextTick();
-  window.print();
-  isPrinting.value = false;
-}
-
-// <link rel="preconnect" href="https://fonts.googleapis.com">
-// <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-// <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:ital,wght@0,100..700;1,100..700&display=swap" rel="stylesheet">
-
-useHead({
-  title: 'Neopets Shapeshifter Solver',
-  htmlAttrs: {
-    lang: 'en',
-  },
-  meta: [
-    { name: 'description', content: 'Solve puzzles' },
-  ],
-  link: [
-    { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
-    { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
-    { href: 'https://fonts.googleapis.com/css2?family=Urbanist:ital,wght@0,100..900;1,100..900&display=swap', rel: 'stylesheet' },
-  ],
-});
+  useHead({
+    title: 'Neopets Shapeshifter Solver',
+    htmlAttrs: {
+      lang: 'en',
+    },
+    meta: [
+      { name: 'description', content: 'Solve puzzles' },
+    ],
+    link: [
+      { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
+      { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
+      { href: 'https://fonts.googleapis.com/css2?family=Urbanist:ital,wght@0,100..900;1,100..900&display=swap', rel: 'stylesheet' },
+    ],
+  });
 </script>
 
 <style lang="scss">
