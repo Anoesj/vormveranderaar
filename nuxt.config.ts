@@ -50,5 +50,12 @@ export default defineNuxtConfig({
     build: {
       target: 'esnext',
     },
+    css: {
+      preprocessorOptions: {
+        scss: {
+          api: 'modern-compiler',
+        },
+      },
+    },
   },
 });
