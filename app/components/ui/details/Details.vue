@@ -9,14 +9,23 @@
       <slot name="summary">
         Details
       </slot>
-      <span aria-hidden="true">
-        <Minus v-if="isOpen"/>
-        <Plus v-else/>
+      <span aria-hidden="true" class="details__icon shrink-0 w-[24px] h-[24px] relative">
+        <!-- NOTE: in-out, but do not add that, because then it doesn't work properly anymore?! :/ -->
+        <Transition name="fade">
+          <component
+            :is="isOpen ? Minus : Plus"
+            :size="24"
+            class="absolute inset-0"
+          />
+        </Transition>
       </span>
     </summary>
-    <div v-if="isOpen" class="p-4">
-      <slot></slot>
-    </div>
+
+    <Transition name="height-auto" mode="out-in">
+      <div v-if="isOpen" class="p-4">
+        <slot></slot>
+      </div>
+    </Transition>
   </details>
 </template>
 
@@ -65,3 +74,42 @@
     }, { flush: 'sync' });
   }
 </script>
+
+<style lang="scss" scoped>
+  .fade-enter-active,
+  .fade-leave-active {
+    transition-timing-function: linear;
+  }
+
+  .details__icon {
+    transition-property: rotate;
+    transition-duration: 0.3s;
+    transition-timing-function: var(--easing-cubic);
+  }
+
+  details:not([open]) .details__icon {
+    rotate: -0.25turn;
+  }
+
+  // If we ever decide not to use v-if on the default slot, we can use the following:
+  // details {
+  //   &::details-content {
+  //     transition-property: opacity, height, content-visibility;
+  //     transition-duration: 0.3s;
+  //     transition-timing-function: var(--easing-cubic);
+  //     transition-behavior: allow-discrete;
+  //     overflow: clip;
+  //   }
+
+  //   &:not([open])::details-content {
+  //     height: 0;
+  //     opacity: 0;
+  //     content-visibility: hidden;
+  //   }
+
+  //   &[open]::details-content {
+  //     height: auto;
+  //     opacity: 1;
+  //   }
+  // }
+</style>

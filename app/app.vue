@@ -271,6 +271,7 @@
                 Puzzle pieces ({{ Object.keys(result.puzzlePieces).length }})
               </h2>
             </template>
+
             <div class="flex items-start gap-4 flex-wrap overflow-x-auto">
               <div
                 v-for="puzzlePiece of result.puzzlePieces"
@@ -312,6 +313,7 @@
                 Phase 2: solutions ({{ numberFormatter.format(result.solutions.length) }}{{ result.meta.returningMaxOneSolution ? ' — maximized at one' : '' }})
               </h2>
             </template>
+
             <p v-if="!result.solutions.length">No solutions possible.</p>
             <template v-else>
               <Solution
@@ -562,6 +564,7 @@
 <style lang="scss">
 html {
   --easing-cubic: cubic-bezier(0.4, 0, 0.2, 1);
+  interpolate-size: allow-keywords;
   font-family: "Urbanist", sans-serif;
   font-optical-sizing: auto;
   // font-size: 20px;
@@ -578,6 +581,7 @@ html {
     );
   background-size: 400px 400px, 18px 18px;
   background-repeat: round, space;
+  background-attachment: fixed;
 
   overflow-wrap: anywhere;
 
@@ -674,5 +678,32 @@ ul {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+.height-auto-enter-active,
+.height-auto-leave-active {
+  transition-property: display, margin-top, margin-bottom, height, min-height, padding-top, padding-bottom, border-top-width, border-bottom-width, filter, scale, opacity !important;
+  transition-duration: 0.3s !important;
+  transition-timing-function: var(--easing-cubic) !important;
+  transition-behavior: allow-discrete !important;
+  overflow: hidden !important;
+}
+
+.height-auto-enter-from,
+.height-auto-leave-to {
+  height: 0 !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  min-height: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  border-top-width: 0 !important;
+  border-bottom-width: 0 !important;
+  opacity: 0 !important;
+}
+
+.height-auto-enter-to,
+.height-auto-leave-from {
+  height: auto !important;
 }
 </style>
