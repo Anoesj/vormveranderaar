@@ -174,11 +174,18 @@
       </Card>
     </div>
 
-    <Transition name="fade" mode="out-in">
+    <Transition
+      name="fade"
+      mode="out-in"
+      type="transition"
+    >
       <div v-if="pending && calculateInBrowser">
         <h1>Cracking the puzzle (this can take a while)<div class="loader"></div></h1>
 
-        <Transition name="fade">
+        <Transition
+          name="fade"
+          type="transition"
+        >
           <pre v-if="status" class="wrapper font-[inherit]">{{ status }}</pre>
         </Transition>
       </div>
@@ -683,7 +690,7 @@ ul {
 .height-auto-enter-active,
 .height-auto-leave-active {
   transition-property: display, margin-top, margin-bottom, height, min-height, padding-top, padding-bottom, border-top-width, border-bottom-width, filter, scale, opacity !important;
-  transition-duration: 0.3s !important;
+  transition-duration: 0.25s !important;
   transition-timing-function: var(--easing-cubic) !important;
   transition-behavior: allow-discrete !important;
   overflow: hidden !important;

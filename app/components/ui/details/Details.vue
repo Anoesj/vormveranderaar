@@ -11,7 +11,10 @@
       </slot>
       <span aria-hidden="true" class="details__icon shrink-0 w-[24px] h-[24px] relative">
         <!-- NOTE: in-out, but do not add that, because then it doesn't work properly anymore?! :/ -->
-        <Transition name="fade">
+        <Transition
+          name="fade"
+          type="transition"
+        >
           <component
             :is="isOpen ? Minus : Plus"
             :size="24"
@@ -21,7 +24,11 @@
       </span>
     </summary>
 
-    <Transition name="height-auto" mode="out-in">
+    <Transition
+      name="height-auto"
+      mode="out-in"
+      type="transition"
+    >
       <div v-if="isOpen" class="p-4">
         <slot></slot>
       </div>
@@ -89,6 +96,12 @@
 
   details:not([open]) .details__icon {
     rotate: -0.25turn;
+  }
+
+  // Without this, the height-auto out-transition will not work,
+  // because the <details> element is not in open state anymore.
+  details::details-content {
+    content-visibility: visible;
   }
 
   // If we ever decide not to use v-if on the default slot, we can use the following:
