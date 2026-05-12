@@ -25,18 +25,23 @@ export function isCrossOriginIsolated () {
 }
 
 /**
- * Recommended worker count for the parallel solver. Defers to
- * `navigator.hardwareConcurrency` with a sanity cap at 32 (just in case some
- * browser reports an absurd value). Returns 1 when threading isn't beneficial.
+ * Recommended worker count for the parallel solver.
  *
- * Per-worker overhead is small (depth-0 root-piece duplication is microseconds,
- * wasm instantiate happens in parallel across workers, postMessage round-trips
- * are sub-millisecond) so the limiting factor is just physical/SMT cores —
- * which is exactly what `hardwareConcurrency` reflects.
+ * `navigator.hardwareConcurrency` reports *logical* cores, which on most x86
+ * machines means physical cores × 2 (SMT/hyperthreading). For our wasm brute
+ * force — heavy random memory access — SMT siblings fight for the same L1/L2
+ * cache and give close to zero additional throughput; using all logical cores
+ * actually loses ground to the per-worker overhead.
+ *
+ * Heuristic: assume any `hc >= 8` machine has SMT (good guess for almost all
+ * consumer x86 and the M-series chips where extra cores are E-cores anyway),
+ * and use roughly half. For smaller machines, just use everything. Sanity-cap
+ * at 16 against pathological values.
  */
 export function recommendedWorkerCount () {
   const hc = (globalThis.navigator?.hardwareConcurrency ?? 1) | 0;
-  return Math.max(1, Math.min(hc, 32));
+  const target = hc >= 8 ? Math.floor(hc / 2) : hc;
+  return Math.max(1, Math.min(target, 16));
 }
 
 type MergedResult = {
@@ -207,11 +212,16 @@ export async function parallelSolve ({
  * Combine N worker payloads (each shaped like a `solve` result) into one merged
  * payload. Solutions and possibleSolutionStarts are concatenated; numeric `meta`
  * fields are summed (counters) or carried over (totals/booleans).
+ *
+ * Only worker 0's response contains the puzzle-level fields (figures,
+ * gameBoard, puzzlePieces, targetFigure). Workers 1..N return a slim payload
+ * with just solutions/possibleSolutionStarts/meta so the orchestrator pays
+ * one structured-clone of the big payload instead of N.
  */
 function mergeSliceResults (results: SliceResult[]): MergedResult {
-  // The first non-empty slice is our template for fixed fields (figures,
-  // gameBoard, puzzlePieces, targetFigure).
-  const head = results.find(Boolean) ?? results[0]!;
+  // Worker 0 always carries the full puzzle payload — it's the template.
+  // If for some reason worker 0 errored, fall back to any non-empty slice.
+  const head = results[0] ?? results.find(Boolean)!;
   const merged: MergedResult = {
     ...head,
     solutions: [],

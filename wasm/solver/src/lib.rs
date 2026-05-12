@@ -3,7 +3,10 @@
 use indexmap::IndexMap;
 use js_sys::Function;
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
+use std::collections::hash_map::DefaultHasher;
 use std::collections::HashSet;
+use std::hash::{Hash, Hasher};
 use wasm_bindgen::prelude::*;
 
 // ============================================================================
@@ -139,6 +142,18 @@ struct PuzzleOut {
     target_figure: u8,
     game_board: GridOut,
     puzzle_pieces: IndexMap<String, PuzzlePieceOut>,
+    solutions: Vec<PossibleSolutionOut>,
+    possible_solution_starts: Vec<PossibleSolutionOut>,
+    meta: MetaOut,
+}
+
+/// Slim variant returned by `solve_slice` workers > 0: everything the
+/// orchestrator can reconstruct from worker 0's full payload is omitted
+/// (`figures`, `targetFigure`, `gameBoard`, `puzzlePieces`). Cuts the
+/// per-Calculate structured-clone work by N-1 across the worker pool.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PuzzleSliceOut {
     solutions: Vec<PossibleSolutionOut>,
     possible_solution_starts: Vec<PossibleSolutionOut>,
     meta: MetaOut,
@@ -1131,7 +1146,10 @@ impl Puzzle {
         let _ = self.status_cb.call1(&this, &JsValue::from_str(&msg));
     }
 
-    fn into_output(self) -> PuzzleOut {
+    /// Takes the per-call state (`solutions`, `possible_solution_starts`, `meta`)
+    /// and clones the template fields so the Puzzle struct itself stays intact
+    /// for caching across Calculates. Called only by worker 0 (full payload).
+    fn take_output(&mut self) -> PuzzleOut {
         let mut puzzle_pieces_map = IndexMap::new();
         for piece in &self.puzzle_pieces {
             puzzle_pieces_map.insert(
@@ -1146,14 +1164,51 @@ impl Puzzle {
         }
 
         PuzzleOut {
-            figures: self.figures,
+            figures: self.figures.clone(),
             target_figure: self.target_figure,
             game_board: self.game_board.to_output(None),
             puzzle_pieces: puzzle_pieces_map,
-            solutions: self.solutions,
-            possible_solution_starts: self.possible_solution_starts,
-            meta: self.meta,
+            solutions: std::mem::take(&mut self.solutions),
+            possible_solution_starts: std::mem::take(&mut self.possible_solution_starts),
+            meta: std::mem::take(&mut self.meta),
         }
+    }
+
+    /// Slim variant for workers > 0: state only, no template clone.
+    fn take_slice_output(&mut self) -> PuzzleSliceOut {
+        PuzzleSliceOut {
+            solutions: std::mem::take(&mut self.solutions),
+            possible_solution_starts: std::mem::take(&mut self.possible_solution_starts),
+            meta: std::mem::take(&mut self.meta),
+        }
+    }
+
+    /// Clear per-call state so the cached Puzzle (template) is ready for another
+    /// `brute_force_solution()` run. Re-installs `status_cb` from the new caller
+    /// and re-derives the `meta` fields that depend on the (constant) template.
+    fn reset_for_solve(&mut self, status_cb: Function) {
+        let total = {
+            let mut t: f64 = 1.0;
+            for p in &self.puzzle_pieces {
+                t *= p.possible_positions.len() as f64;
+            }
+            t
+        };
+        let returning_max_one_solution = total > 1_000_000.0;
+
+        self.solutions.clear();
+        self.possible_solution_starts.clear();
+        self.has_prepared_solution_starts = false;
+        self.unique_situations.clear();
+        self.meta = MetaOut::default();
+        self.meta.total_number_of_possible_combinations = total;
+        self.meta.returning_max_one_solution = returning_max_one_solution;
+        let now = now_ms();
+        self.t_start = now;
+        self.t_last_still_thinking = now;
+        self.status_cb = status_cb;
+        self.max_one_solution_hit = false;
+        self.slice_ctx = None;
     }
 }
 
@@ -1606,12 +1661,43 @@ pub fn solve(
 
     puzzle.brute_force_solution();
 
-    let out = puzzle.into_output();
+    let out = puzzle.take_output();
     let serializer = serde_wasm_bindgen::Serializer::new()
         .serialize_maps_as_objects(true)
         .serialize_large_number_types_as_bigints(false);
     out.serialize(&serializer)
         .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
+}
+
+// Per-worker cache: each web worker has its own thread_local. When a Calculate
+// comes in with the same PuzzleOptions as the previous one, we reuse the parsed
+// Puzzle (precomputed piece positions etc.) and just reset the per-call state.
+// Skips the parse + sliding-window precompute step that 16 workers were otherwise
+// each redoing per Calculate.
+thread_local! {
+    static CACHED_PUZZLE: RefCell<Option<(u64, Puzzle)>> = const { RefCell::new(None) };
+}
+
+fn fingerprint_opts(opts: &PuzzleOptionsIn) -> u64 {
+    let mut h = DefaultHasher::new();
+    for f in &opts.figures {
+        match f {
+            FigureNameIn::Str(s) => {
+                0u8.hash(&mut h);
+                s.hash(&mut h);
+            }
+            FigureNameIn::Num(n) => {
+                1u8.hash(&mut h);
+                // f64 doesn't implement Hash, so hash the bit pattern. Distinct
+                // NaN payloads will fingerprint differently, which is fine — the
+                // worst case is a needless rebuild.
+                n.to_bits().hash(&mut h);
+            }
+        }
+    }
+    opts.game_board.hash(&mut h);
+    opts.puzzle_pieces.hash(&mut h);
+    h.finish()
 }
 
 /// Like `solve`, but processes only the tasks assigned to this worker out of `num_workers`.
@@ -1643,7 +1729,25 @@ pub fn solve_slice(
         ));
     }
 
-    let mut puzzle = Puzzle::new(options, status_cb);
+    let fp = fingerprint_opts(&options);
+
+    // Pull the cached Puzzle out (if it matches), or build a new one. Putting
+    // it back into the cache at the end completes the rotation.
+    let mut puzzle = CACHED_PUZZLE.with(|c| {
+        let mut c = c.borrow_mut();
+        match c.as_ref() {
+            Some((cached_fp, _)) if *cached_fp == fp => c.take().map(|(_, p)| p),
+            _ => None,
+        }
+    });
+
+    let mut puzzle: Puzzle = if let Some(mut p) = puzzle.take() {
+        p.reset_for_solve(status_cb);
+        p
+    } else {
+        Puzzle::new(options, status_cb)
+    };
+
     puzzle.slice_ctx = Some(SliceCtxOwned {
         worker_index,
         num_workers,
@@ -1656,12 +1760,24 @@ pub fn solve_slice(
 
     puzzle.brute_force_solution();
 
-    let out = puzzle.into_output();
+    // Workers > 0 send only the per-slice fields. The orchestrator reconstructs
+    // the full puzzle payload from worker 0's response.
     let serializer = serde_wasm_bindgen::Serializer::new()
         .serialize_maps_as_objects(true)
         .serialize_large_number_types_as_bigints(false);
-    out.serialize(&serializer)
-        .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
+    let result = if worker_index == 0 {
+        puzzle.take_output().serialize(&serializer)
+    } else {
+        puzzle.take_slice_output().serialize(&serializer)
+    };
+
+    // Return the Puzzle to the cache so the next Calculate with the same opts
+    // can skip the parse + sliding-window precompute.
+    CACHED_PUZZLE.with(|c| {
+        *c.borrow_mut() = Some((fp, puzzle));
+    });
+
+    result.map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
 }
 
 #[cfg(test)]
