@@ -1,14 +1,12 @@
 import init, { solve, solve_slice } from '../../wasm/solver/pkg/solver.js';
 import wasmUrl from '../../wasm/solver/pkg/solver_bg.wasm?url';
 
-let wasmReady: Promise<unknown> | null = null;
-
-function ensureWasmReady () {
-  if (!wasmReady) {
-    wasmReady = init({ module_or_path: wasmUrl });
-  }
-  return wasmReady;
-}
+// Kick off wasm fetch + compile the moment the worker module loads, instead of
+// waiting for the first message. Combined with the persistent worker pool in
+// `useParallelSolver`, this means a brand-new pool of N workers warms up in
+// parallel while the user is still poking at the UI, and Calculate doesn't pay
+// any wasm-init cost.
+const wasmReady = init({ module_or_path: wasmUrl });
 
 type CalculateMsg = {
   type: 'calculate';
@@ -41,7 +39,7 @@ onmessage = async (event: MessageEvent<CalculateMsg | CalculateSliceMsg>) => {
   if (data.type === 'calculate') {
     console.log('Web Worker about to calculate the following situation:', data.payload);
 
-    await ensureWasmReady();
+    await wasmReady;
 
     const statusCb = (msg: string) => {
       console.log(msg);
@@ -65,7 +63,7 @@ onmessage = async (event: MessageEvent<CalculateMsg | CalculateSliceMsg>) => {
   }
 
   if (data.type === 'calculate-slice') {
-    await ensureWasmReady();
+    await wasmReady;
 
     const { stopBuffer } = data;
 

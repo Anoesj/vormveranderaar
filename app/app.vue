@@ -422,7 +422,9 @@
   // during Nitro's SPA-shell prerender pass anyway), so expose the core count
   // through a computed instead of referencing the global directly.
   const coreCount = computed(() => {
-    if (typeof navigator === 'undefined') return 1;
+    if (typeof navigator === 'undefined') {
+      return 1;
+    }
     return navigator.hardwareConcurrency || 1;
   });
   const workerCountForUi = computed(() => recommendedWorkerCount());
@@ -472,6 +474,20 @@
     }
     else {
       shapeshifterWorker?.terminate();
+      releaseWorkerPool();
+    }
+  }, { immediate: true });
+
+  // Pre-warm the parallel worker pool whenever the toggle is on and we have
+  // > 1 worker to use. Each worker pays a one-time wasm fetch + compile cost
+  // (~30-50 ms) on spawn — doing it here means the cost is paid while the
+  // user is still poking at the UI, not during Calculate.
+  watch([calculateInBrowser, parallelWorkerCount], ([inBrowser, count]) => {
+    if (inBrowser && count > 1) {
+      ensureWorkerPool(count);
+    }
+    else {
+      releaseWorkerPool();
     }
   }, { immediate: true });
 

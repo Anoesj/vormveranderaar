@@ -55,12 +55,49 @@ export type ParallelSolveOptions = {
   onStatus?: ProgressCallback;
 };
 
+// --- Persistent worker pool --------------------------------------------------
+//
+// Each worker pays a one-time wasm fetch + compile cost (~30-50 ms) when it
+// starts. With N=16 workers and a fresh spawn on every Calculate, that cost
+// dominates short puzzles — measurably 3x slower than the single-worker path
+// for a 50 ms puzzle. Keeping workers warm across Calculates fixes it.
+//
+// The pool is reset when the requested size changes (toggle on, change worker
+// count) and on abort (terminating workers is the only way to stop in-flight
+// wasm — there's no cooperative cancellation handle).
+
+let workerPool: InstanceType<typeof ShapeshifterWorker>[] | null = null;
+
+export function ensureWorkerPool (size: number) {
+  if (size <= 0) {
+    releaseWorkerPool();
+    return [];
+  }
+  if (!workerPool || workerPool.length !== size) {
+    releaseWorkerPool();
+    workerPool = Array.from({ length: size }, () => new ShapeshifterWorker());
+  }
+  return workerPool;
+}
+
+export function releaseWorkerPool () {
+  if (workerPool) {
+    for (const w of workerPool) {
+      w.terminate();
+    }
+    workerPool = null;
+  }
+}
+
 /**
  * Spawn `numWorkers` shapeshifter workers, hand each its depth-1 slice, collect
  * results and merge them into a single payload shaped like a regular `solve`
  * result. Uses a `SharedArrayBuffer` stop flag (if available) so the first
  * worker to find a solution can ask the others to bail mid-iteration when
  * `returningMaxOneSolution` is set on the puzzle.
+ *
+ * Workers come from a persistent pool (see `ensureWorkerPool`) so wasm init
+ * is paid once per pool, not per Calculate.
  */
 export async function parallelSolve ({
   payload,
@@ -71,16 +108,14 @@ export async function parallelSolve ({
 }: ParallelSolveOptions): Promise<MergedResult> {
   const isolated = isCrossOriginIsolated();
   const stopBuffer = isolated ? new Int32Array(new SharedArrayBuffer(4)) : undefined;
-  const workers: InstanceType<typeof ShapeshifterWorker>[] = [];
+  const workers = ensureWorkerPool(numWorkers);
 
-  const cleanup = () => {
-    for (const w of workers) {
-      w.terminate();
-    }
-    workers.length = 0;
+  const onAbort = () => {
+    // Cancellation = terminate the pool. The next call will spin up a fresh
+    // one and re-pay the wasm-init cost, but cancel is a rare event.
+    releaseWorkerPool();
   };
-
-  signal?.addEventListener('abort', cleanup, { once: true });
+  signal?.addEventListener('abort', onAbort, { once: true });
 
   try {
     const sliceResults: SliceResult[] = new Array(numWorkers);
@@ -89,8 +124,7 @@ export async function parallelSolve ({
 
     const waitAll = new Promise<void>((resolve, reject) => {
       for (let i = 0; i < numWorkers; i++) {
-        const worker = new ShapeshifterWorker();
-        workers.push(worker);
+        const worker = workers[i]!;
 
         worker.onmessage = (event) => {
           const data = event.data as {
@@ -158,7 +192,14 @@ export async function parallelSolve ({
     return mergeSliceResults(sliceResults);
   }
   finally {
-    cleanup();
+    signal?.removeEventListener('abort', onAbort);
+    // Clear listeners on the pool workers so a stale closure doesn't try to
+    // resolve into the next Calculate's `Promise`. The workers themselves stay
+    // warm in the pool.
+    for (const w of workers) {
+      w.onmessage = null;
+      w.onerror = null;
+    }
   }
 }
 
