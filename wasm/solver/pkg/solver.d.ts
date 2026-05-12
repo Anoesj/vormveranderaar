@@ -5,11 +5,26 @@ export function on_start(): void;
 
 export function solve(options_js: any, settings_js: any, status_cb: Function): any;
 
+/**
+ * Like `solve`, but processes only the tasks assigned to this worker out of `num_workers`.
+ *
+ * Slicing happens at "task depth": for puzzles with ≥ 2 unused puzzle pieces (the common
+ * case) that's depth 1 of the recursion — task index = `root_pos_i * num_depth1_positions
+ * + depth1_pos_i`, and worker `w` processes indices where `task_idx % num_workers == w`.
+ * For puzzles with exactly one unused piece, slicing falls back to depth 0.
+ *
+ * `stop_cb` is polled every ~65k attempts (same throttle as the time check). Typically
+ * backed by an `Atomics.load` on a `SharedArrayBuffer` so the orchestrator can broadcast
+ * "first worker found a solution, everyone bail" cheaply.
+ */
+export function solve_slice(options_js: any, settings_js: any, status_cb: Function, num_workers: number, worker_index: number, stop_cb?: Function | null): any;
+
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly solve: (a: any, b: any, c: any) => [number, number, number];
+    readonly solve_slice: (a: any, b: any, c: any, d: number, e: number, f: number) => [number, number, number];
     readonly on_start: () => void;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;

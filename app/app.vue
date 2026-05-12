@@ -162,6 +162,28 @@
                   </span>
                 </Label>
               </div>
+
+              <div class="grid grid-cols-subgrid col-span-full items-center">
+                <Switch
+                  id="use-multi-threading"
+                  v-model:checked="useMultiThreading"
+                  :disabled="!canMultiThread"
+                />
+                <Label for="use-multi-threading" class="leading-5">
+                  Use multi-threading
+                  <br>
+                  <span class="text-gray-400">
+                    <template v-if="canMultiThread">
+                      Spread the brute force across {{ workerCountForUi }} web workers
+                      ({{ coreCount }} cores available). Falls back to a
+                      single worker if SharedArrayBuffer isn't available.
+                    </template>
+                    <template v-else>
+                      Only one logical core available — multi-threading is disabled.
+                    </template>
+                  </span>
+                </Label>
+              </div>
             </div>
           </div>
 
@@ -210,7 +232,7 @@
               <h2>Info</h2>
               <!-- eslint-disable-next-line vue/max-len -->
               <p>{{ result.solutions.length > 0 ? '✅' : '❌' }} <strong>{{ result.solutions.length > 0 ? `${result.solutions.length} solution${result.solutions.length > 1 ? 's' : ''} found` : 'no solution found' }}</strong></p>
-              <p>ℹ️ <strong>{{ result.meta.returningMaxOneSolution ? 'Maximum of one solution returned for better performance' : 'Looked for all possible solutions' }}</strong></p>
+              <p>ℹ️ <strong>{{ maxOneSolutionMessage }}</strong></p>
               <p>⏱️ <strong>{{ formatDuration(result.meta.calculationDuration) }}</strong> to calculate the situation</p>
               <p v-if="calculateInBrowser">🧠 <em>Max memory cannot be measured when calculating in-browser</em></p>
               <p v-else>🧠 <strong>{{ formatMemory(result.meta.maxMemoryUsed) }}</strong> max memory used</p>
@@ -317,7 +339,7 @@
             <template #summary>
               <h2 class="flex items-center gap-2">
                 <BadgeCheck class="grow-0 shrink-0"/>
-                Phase 2: solutions ({{ numberFormatter.format(result.solutions.length) }}{{ result.meta.returningMaxOneSolution ? ' — maximized at one' : '' }})
+                Phase 2: solutions ({{ numberFormatter.format(result.solutions.length) }}{{ phase2EarlyStopSuffix }})
               </h2>
             </template>
 
@@ -379,6 +401,59 @@
   const showFigures = useLocalStorage('showFigures', true);
   const calculateInBrowser = useLocalStorage('calculateInBrowser', true);
   const preparePossibleSolutionStarts = useLocalStorage('preparePossibleSolutionStarts', false);
+  const useMultiThreading = useLocalStorage('useMultiThreading', true);
+
+  // Single source of truth for whether the parallel solver is actually usable in
+  // this browser/run. Goes to false when there's only one logical core, when
+  // `SharedArrayBuffer` isn't exposed (no COOP/COEP), or when the user has turned
+  // the toggle off — the parallel path falls back to the existing single-worker
+  // flow automatically in those cases.
+  const parallelWorkerCount = computed(() => {
+    if (!calculateInBrowser.value) {
+      return 1;
+    }
+    if (!useMultiThreading.value) {
+      return 1;
+    }
+    return recommendedWorkerCount();
+  });
+  const canMultiThread = computed(() => recommendedWorkerCount() > 1);
+
+  // `returningMaxOneSolution` only means "each worker bails after its first
+  // solution", so with N parallel workers each one can find a different
+  // solution before the shared stop flag reaches them — you can see up to N
+  // solutions even in early-stop mode. The original text claimed the count
+  // was guaranteed to be one; rewrite it to match what actually happened.
+  const maxOneSolutionMessage = computed(() => {
+    const r = result.value;
+    if (!r) {
+      return '';
+    }
+    if (!r.meta.returningMaxOneSolution) {
+      return 'Looked for all possible solutions';
+    }
+    if (r.solutions.length <= 1) {
+      return 'Stopped after finding one solution (for better performance)';
+    }
+    return `Stopped after the first solution per worker — ${r.solutions.length} solutions found across parallel workers`;
+  });
+  const phase2EarlyStopSuffix = computed(() => {
+    const r = result.value;
+    if (!r?.meta.returningMaxOneSolution) {
+      return '';
+    }
+    return r.solutions.length <= 1 ? ' — early stop after first' : ' — across parallel workers';
+  });
+  // `navigator` isn't part of the Vue template scope (and would be `undefined`
+  // during Nitro's SPA-shell prerender pass anyway), so expose the core count
+  // through a computed instead of referencing the global directly.
+  const coreCount = computed(() => {
+    if (typeof navigator === 'undefined') {
+      return 1;
+    }
+    return navigator.hardwareConcurrency || 1;
+  });
+  const workerCountForUi = computed(() => recommendedWorkerCount());
 
   const puzzleOptions = shallowRef<PuzzleOptions>();
   const puzzleOptionsStringified = usePuzzleOptionsStringified(puzzleOptions);
@@ -425,6 +500,20 @@
     }
     else {
       shapeshifterWorker?.terminate();
+      releaseWorkerPool();
+    }
+  }, { immediate: true });
+
+  // Pre-warm the parallel worker pool whenever the toggle is on and we have
+  // > 1 worker to use. Each worker pays a one-time wasm fetch + compile cost
+  // (~30-50 ms) on spawn — doing it here means the cost is paid while the
+  // user is still poking at the UI, not during Calculate.
+  watch([calculateInBrowser, parallelWorkerCount], ([inBrowser, count]) => {
+    if (inBrowser && count > 1) {
+      ensureWorkerPool(count);
+    }
+    else {
+      releaseWorkerPool();
     }
   }, { immediate: true });
 
@@ -470,38 +559,57 @@
 
     if (calculateInBrowser.value) {
       try {
-        response = await new Promise<InstanceType<typeof Puzzle>>((resolve, reject) => {
-          shapeshifterWorker.onmessage = (event) => {
-            const { type, payload } = event.data as {
-              type: 'status-update';
-              payload: string;
-            } | {
-              type: 'finished';
-              payload: InstanceType<typeof Puzzle>;
-            };
-
-            if (type === 'finished') {
-              resolve(payload);
-              status.value = undefined;
-            }
-            else {
-              status.value = payload;
-            }
-          };
-
-          shapeshifterWorker.onerror = (event) => {
-            status.value = undefined;
-            reject(event);
-          };
-
-          shapeshifterWorker.postMessage({
-            type: 'calculate',
-            payload: payload,
+        if (parallelWorkerCount.value > 1) {
+          // Parallel path: spin up N workers, give each a depth-1 slice. Falls back
+          // automatically to the single-worker path if SharedArrayBuffer is unavailable
+          // or hardwareConcurrency <= 1.
+          response = await parallelSolve({
+            payload,
             settings: {
               preparePossibleSolutionStarts: preparePossibleSolutionStarts.value,
             },
+            numWorkers: parallelWorkerCount.value,
+            signal: controller.signal,
+            onStatus: (msg) => {
+              status.value = msg;
+            },
+          }) as InstanceType<typeof Puzzle>;
+          status.value = undefined;
+        }
+        else {
+          response = await new Promise<InstanceType<typeof Puzzle>>((resolve, reject) => {
+            shapeshifterWorker.onmessage = (event) => {
+              const { type, payload } = event.data as {
+                type: 'status-update';
+                payload: string;
+              } | {
+                type: 'finished';
+                payload: InstanceType<typeof Puzzle>;
+              };
+
+              if (type === 'finished') {
+                resolve(payload);
+                status.value = undefined;
+              }
+              else {
+                status.value = payload;
+              }
+            };
+
+            shapeshifterWorker.onerror = (event) => {
+              status.value = undefined;
+              reject(event);
+            };
+
+            shapeshifterWorker.postMessage({
+              type: 'calculate',
+              payload: payload,
+              settings: {
+                preparePossibleSolutionStarts: preparePossibleSolutionStarts.value,
+              },
+            });
           });
-        });
+        }
       }
       catch (err) {
         error.value = (err as Error).toString();

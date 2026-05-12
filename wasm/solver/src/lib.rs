@@ -3,7 +3,10 @@
 use indexmap::IndexMap;
 use js_sys::Function;
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
+use std::collections::hash_map::DefaultHasher;
 use std::collections::HashSet;
+use std::hash::{Hash, Hasher};
 use wasm_bindgen::prelude::*;
 
 // ============================================================================
@@ -144,6 +147,18 @@ struct PuzzleOut {
     meta: MetaOut,
 }
 
+/// Slim variant returned by `solve_slice` workers > 0: everything the
+/// orchestrator can reconstruct from worker 0's full payload is omitted
+/// (`figures`, `targetFigure`, `gameBoard`, `puzzlePieces`). Cuts the
+/// per-Calculate structured-clone work by N-1 across the worker pool.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PuzzleSliceOut {
+    solutions: Vec<PossibleSolutionOut>,
+    possible_solution_starts: Vec<PossibleSolutionOut>,
+    meta: MetaOut,
+}
+
 // ============================================================================
 // Internal types
 // ============================================================================
@@ -273,6 +288,15 @@ struct PuzzlePiece {
     all_position_indices: Vec<usize>,
     /// Indices into `possible_positions` that don't touch any game-board corner.
     corner_safe_position_indices: Vec<usize>,
+    /// For each entry in `possible_positions`, a u64 bitmask of which game-board cells
+    /// the piece's 1-cells land on (bit `idx` set iff cell `idx` is touched). Used by
+    /// the packed bit-plane brute-force path; populated only when `game_board.cells()
+    /// <= 64`, empty otherwise (larger boards fall back to the u8 path).
+    mask_by_position: Vec<u64>,
+    /// `popcount(mask)` cached alongside each mask. The packed apply computes the
+    /// running-sum delta as `mask_popcount - fc * count_of_cells_at_value_(fc-1)`,
+    /// so we want popcount precomputed rather than re-evaluating per apply.
+    mask_popcount_by_position: Vec<u32>,
 }
 
 impl PuzzlePiece {
@@ -319,6 +343,12 @@ impl PuzzlePiece {
         let mut possible_positions = Vec::new();
         let mut indices_by_position: Vec<Vec<usize>> = Vec::new();
         let mut grid_by_position: Vec<Grid> = Vec::new();
+        // Packed-path masks alongside indices. Only built when the game board fits
+        // into a single u64 (≤ 64 cells); larger boards leave these empty and the
+        // brute force falls back to the u8 path.
+        let cells_fit_in_u64 = game_board.cells() <= 64;
+        let mut mask_by_position: Vec<u64> = Vec::new();
+        let mut mask_popcount_by_position: Vec<u32> = Vec::new();
 
         if game_board.rows >= grid.rows && game_board.cols >= grid.cols {
             for y in 0..=(game_board.rows - grid.rows) {
@@ -327,6 +357,7 @@ impl PuzzlePiece {
 
                     let mut indices = Vec::new();
                     let mut placed = Grid::empty_like(game_board);
+                    let mut mask: u64 = 0;
                     for ry in 0..grid.rows {
                         for rx in 0..grid.cols {
                             let v = grid.at(rx, ry);
@@ -336,11 +367,18 @@ impl PuzzlePiece {
                                 let idx = gy * game_board.cols + gx;
                                 indices.push(idx);
                                 placed.data[idx] = v;
+                                if cells_fit_in_u64 {
+                                    mask |= 1u64 << idx;
+                                }
                             }
                         }
                     }
                     indices_by_position.push(indices);
                     grid_by_position.push(placed);
+                    if cells_fit_in_u64 {
+                        mask_popcount_by_position.push(mask.count_ones());
+                        mask_by_position.push(mask);
+                    }
                 }
             }
         }
@@ -372,6 +410,8 @@ impl PuzzlePiece {
             can_avoid_affecting_some_corners,
             possible_positions,
             indices_by_position,
+            mask_by_position,
+            mask_popcount_by_position,
             grid_by_position,
             all_position_indices,
             corner_safe_position_indices,
@@ -476,6 +516,15 @@ struct Puzzle {
     t_last_still_thinking: f64,
     status_cb: Function,
     max_one_solution_hit: bool,
+    /// `Some` when the run is one slice of a multi-worker split (set by `solve_slice`).
+    /// Owned variant of `SliceCtx`; we hand a borrowed view to the recursion.
+    slice_ctx: Option<SliceCtxOwned>,
+}
+
+struct SliceCtxOwned {
+    worker_index: u32,
+    num_workers: u32,
+    stop_cb: Option<Function>,
 }
 
 fn now_ms() -> f64 {
@@ -541,6 +590,7 @@ impl Puzzle {
             t_last_still_thinking: now_ms(),
             status_cb,
             max_one_solution_hit: false,
+            slice_ctx: None,
         };
 
         puzzle.init_corners_info();
@@ -927,18 +977,42 @@ impl Puzzle {
             });
         }
 
+        // Pick the board engine once for the whole run. The packed bit-plane path
+        // is only viable when the game board fits in a u64 AND every piece has
+        // its `mask_by_position` populated (built in `PuzzlePiece::new` under the
+        // same ≤ 64 cells condition).
+        let use_packed = self.game_board.cells() <= 64
+            && self
+                .puzzle_pieces
+                .iter()
+                .all(|p| !p.mask_by_position.is_empty() || p.possible_positions.is_empty());
+
+        if use_packed {
+            match bits_per_cell_for(self.figures_count) {
+                Some(1) => self.brute_force_with_engine::<PackedEngine<1>>(),
+                Some(2) => self.brute_force_with_engine::<PackedEngine<2>>(),
+                Some(3) => self.brute_force_with_engine::<PackedEngine<3>>(),
+                Some(4) => self.brute_force_with_engine::<PackedEngine<4>>(),
+                _ => self.brute_force_with_engine::<U8Engine>(),
+            }
+        } else {
+            self.brute_force_with_engine::<U8Engine>();
+        }
+    }
+
+    fn brute_force_with_engine<B: BoardEngine>(&mut self) {
         let count = self.possible_solution_starts.len();
         for i in 0..count {
             if self.max_one_solution_hit {
                 break;
             }
-            self.brute_force_one_start(i);
+            self.brute_force_one_start::<B>(i);
         }
 
         self.finalize();
     }
 
-    fn brute_force_one_start(&mut self, start_index: usize) {
+    fn brute_force_one_start<B: BoardEngine>(&mut self, start_index: usize) {
         let avoid_corners = self.has_prepared_solution_starts;
 
         // Compute unused puzzle piece indices (sorted by cellsInfluenced desc).
@@ -1059,14 +1133,14 @@ impl Puzzle {
         let base_parts: Vec<PossibleSolutionPartOut> =
             self.possible_solution_starts[start_index].parts.clone();
 
-        let mut state = IterState {
-            board: initial_board.data.clone(),
+        let mut state = IterState::<B> {
+            engine: B::from_grid(&initial_board, figures_count),
             board_sum: initial_board_sum,
             placement_stack: Vec::with_capacity(n),
             iter_check_counter: 0,
         };
 
-        iter_placements_inner(
+        iter_placements_inner::<B>(
             &IterCtx {
                 pieces,
                 figures_count,
@@ -1082,6 +1156,11 @@ impl Puzzle {
                 initial_board: &initial_board,
                 start_index,
                 returning_max_one_solution: meta.returning_max_one_solution,
+                slice: self.slice_ctx.as_ref().map(|s| SliceCtx {
+                    worker_index: s.worker_index,
+                    num_workers: s.num_workers,
+                    stop_cb: s.stop_cb.as_ref(),
+                }),
             },
             &mut IterMutState {
                 state: &mut state,
@@ -1090,6 +1169,7 @@ impl Puzzle {
                 max_one_solution_hit,
                 t_last_still_thinking,
             },
+            0,
             0,
         );
     }
@@ -1115,7 +1195,10 @@ impl Puzzle {
         let _ = self.status_cb.call1(&this, &JsValue::from_str(&msg));
     }
 
-    fn into_output(self) -> PuzzleOut {
+    /// Takes the per-call state (`solutions`, `possible_solution_starts`, `meta`)
+    /// and clones the template fields so the Puzzle struct itself stays intact
+    /// for caching across Calculates. Called only by worker 0 (full payload).
+    fn take_output(&mut self) -> PuzzleOut {
         let mut puzzle_pieces_map = IndexMap::new();
         for piece in &self.puzzle_pieces {
             puzzle_pieces_map.insert(
@@ -1130,14 +1213,51 @@ impl Puzzle {
         }
 
         PuzzleOut {
-            figures: self.figures,
+            figures: self.figures.clone(),
             target_figure: self.target_figure,
             game_board: self.game_board.to_output(None),
             puzzle_pieces: puzzle_pieces_map,
-            solutions: self.solutions,
-            possible_solution_starts: self.possible_solution_starts,
-            meta: self.meta,
+            solutions: std::mem::take(&mut self.solutions),
+            possible_solution_starts: std::mem::take(&mut self.possible_solution_starts),
+            meta: std::mem::take(&mut self.meta),
         }
+    }
+
+    /// Slim variant for workers > 0: state only, no template clone.
+    fn take_slice_output(&mut self) -> PuzzleSliceOut {
+        PuzzleSliceOut {
+            solutions: std::mem::take(&mut self.solutions),
+            possible_solution_starts: std::mem::take(&mut self.possible_solution_starts),
+            meta: std::mem::take(&mut self.meta),
+        }
+    }
+
+    /// Clear per-call state so the cached Puzzle (template) is ready for another
+    /// `brute_force_solution()` run. Re-installs `status_cb` from the new caller
+    /// and re-derives the `meta` fields that depend on the (constant) template.
+    fn reset_for_solve(&mut self, status_cb: Function) {
+        let total = {
+            let mut t: f64 = 1.0;
+            for p in &self.puzzle_pieces {
+                t *= p.possible_positions.len() as f64;
+            }
+            t
+        };
+        let returning_max_one_solution = total > 1_000_000.0;
+
+        self.solutions.clear();
+        self.possible_solution_starts.clear();
+        self.has_prepared_solution_starts = false;
+        self.unique_situations.clear();
+        self.meta = MetaOut::default();
+        self.meta.total_number_of_possible_combinations = total;
+        self.meta.returning_max_one_solution = returning_max_one_solution;
+        let now = now_ms();
+        self.t_start = now;
+        self.t_last_still_thinking = now;
+        self.status_cb = status_cb;
+        self.max_one_solution_hit = false;
+        self.slice_ctx = None;
     }
 }
 
@@ -1169,15 +1289,31 @@ struct IterCtx<'a> {
     initial_board: &'a Grid,
     start_index: usize,
     returning_max_one_solution: bool,
+    /// `Some` when this run is one slice of a multi-worker split. The recursion uses
+    /// it (a) to skip depth-1 tasks not assigned to this worker, and (b) to poll the
+    /// shared stop flag at the same throttle point as the `now_ms` time check.
+    slice: Option<SliceCtx<'a>>,
 }
 
-/// Per-call state held by value across recursion.
-struct IterState {
-    /// Working game board (mutated in place + reverted on backtrack).
-    board: Vec<u8>,
-    /// Running sum of `board`. Maintained incrementally on apply/revert so we never
-    /// have to scan the board to compute it, and so the solution check becomes
-    /// `board_sum == completed_sum` (since values are bounded by `target_figure`).
+/// Slicing/stop info for a single parallel worker. See `solve_slice`.
+struct SliceCtx<'a> {
+    worker_index: u32,
+    num_workers: u32,
+    /// JS callback returning `true` when this worker should stop ASAP (typically backed
+    /// by `Atomics.load(sharedStopBuffer, 0) !== 0`). Called every ~65k attempts; the
+    /// `wasm → JS` boundary is cheap enough at that rate.
+    stop_cb: Option<&'a Function>,
+}
+
+/// Per-call state held by value across recursion. Generic over the board
+/// representation (u8 array or bit-plane packed) so the recursion compiles
+/// once per engine type and inlines the right apply/revert path.
+struct IterState<B: BoardEngine> {
+    engine: B,
+    /// Running sum across the working board. Maintained incrementally on
+    /// apply/revert (delta returned by `engine.apply`) so we never have to
+    /// scan the board, and the solution check is `board_sum == completed_sum`
+    /// (cell values are bounded by `target_figure`).
     board_sum: usize,
     placement_stack: Vec<Placement>,
     iter_check_counter: u32,
@@ -1185,15 +1321,20 @@ struct IterState {
 
 /// Mutable references that need to outlive the recursion. Held separately from
 /// `IterCtx` so the borrow checker is happy with the disjoint-field borrows.
-struct IterMutState<'a> {
-    state: &'a mut IterState,
+struct IterMutState<'a, B: BoardEngine> {
+    state: &'a mut IterState<B>,
     meta: &'a mut MetaOut,
     solutions: &'a mut Vec<PossibleSolutionOut>,
     max_one_solution_hit: &'a mut bool,
     t_last_still_thinking: &'a mut f64,
 }
 
-fn iter_placements_inner(ctx: &IterCtx, m: &mut IterMutState, depth: usize) {
+fn iter_placements_inner<B: BoardEngine>(
+    ctx: &IterCtx,
+    m: &mut IterMutState<'_, B>,
+    depth: usize,
+    parent_i_pos: usize,
+) {
     if *m.max_one_solution_hit {
         return;
     }
@@ -1213,18 +1354,60 @@ fn iter_placements_inner(ctx: &IterCtx, m: &mut IterMutState, depth: usize) {
     // benchmarked identically to the slice iterator, so we use the cleaner iterator.
     let position_indices = piece.position_indices(avoid_corners);
 
-    for &pos_arr_idx in position_indices {
+    // Slicing for multi-worker mode: at the depth where we hand out tasks to workers
+    // (depth 1 for "normal" puzzles with >=2 unused pieces, or depth 0 if there's only
+    // one unused piece), skip iterations whose `task_idx % num_workers != worker_index`.
+    // The task index is built deterministically so every worker enumerates the same
+    // tree, just keeps its own slice.
+    //
+    // `should_count` controls whether this iteration contributes to the meta counters.
+    // Above the split depth every worker walks the same nodes (duplicated work), so to
+    // make the *summed* counters across workers match the single-thread totals we only
+    // let worker 0 count there. At and below the split depth each worker processes a
+    // unique slice and all of them count their share.
+    let (slice_at_this_depth, num_workers, worker_index, should_count) = match ctx.slice {
+        Some(ref s) => {
+            let split_depth = if ctx.unused.len() >= 2 { 1usize } else { 0usize };
+            let count = depth >= split_depth || s.worker_index == 0;
+            (depth == split_depth, s.num_workers as usize, s.worker_index as usize, count)
+        }
+        None => (false, 1, 0, true),
+    };
+
+    for (i_pos, &pos_arr_idx) in position_indices.iter().enumerate() {
         if *m.max_one_solution_hit {
             return;
         }
 
-        m.meta.total_number_of_iterator_placement_attempts += 1.0;
+        // Skip tasks that belong to another worker.
+        if slice_at_this_depth {
+            let task_idx = parent_i_pos * position_indices.len() + i_pos;
+            if task_idx % num_workers != worker_index {
+                continue;
+            }
+        }
+
+        if should_count {
+            m.meta.total_number_of_iterator_placement_attempts += 1.0;
+        }
         m.state.iter_check_counter += 1;
 
         // Throttle the JS `Date.now()` call — the wasm→JS call alone is more
         // expensive than dozens of iterations of the actual brute force.
         if m.state.iter_check_counter >= 65_536 {
             m.state.iter_check_counter = 0;
+            // While we're already crossing the wasm↔JS boundary for the time check,
+            // also poll the shared stop flag. Both are ~50-200ns; cheap at this throttle.
+            if let Some(slice) = ctx.slice.as_ref() {
+                if let Some(stop_cb) = slice.stop_cb {
+                    if let Ok(v) = stop_cb.call0(&JsValue::NULL) {
+                        if v.is_truthy() {
+                            *m.max_one_solution_hit = true;
+                            return;
+                        }
+                    }
+                }
+            }
             let now = now_ms();
             if now - *m.t_last_still_thinking > 5000.0 {
                 *m.t_last_still_thinking = now;
@@ -1238,39 +1421,44 @@ fn iter_placements_inner(ctx: &IterCtx, m: &mut IterMutState, depth: usize) {
                     0.0
                 };
                 let throughput = if time_passed > 0.0 {
-                    (skipped_imp / (time_passed / 1000.0)).round()
+                    skipped_imp / (time_passed / 1000.0)
+                } else {
+                    0.0
+                };
+                let throughput_pct = if total_possible > 0.0 {
+                    throughput / total_possible * 100.0
                 } else {
                     0.0
                 };
                 let msg = format!(
-                    "Still thinking...\nNumber of puzzle piece placement attempts so far: {}\nNumber of skipped impossible situations: {}\nTotal possible combinations: {}\nPercentage of all possible combinations tried: {:.2}%\nTime passed: {}\nThroughput: {} situations per second",
+                    "Still thinking...\nNumber of puzzle piece placement attempts so far: {}\nNumber of skipped impossible situations: {}\nTotal possible combinations: {}\nPercentage of all possible combinations tried: {:.2}%\nTime passed: {}\nThroughput: {} situations per second\nThroughput percentage: {}% per second",
                     fmt_num(attempts),
                     fmt_num(skipped_imp),
                     fmt_num(total_possible),
                     pct,
                     fmt_duration(time_passed),
-                    fmt_num(throughput),
+                    fmt_num(throughput.round()),
+                    fmt_small_percentage(throughput_pct),
                 );
                 let _ = ctx.status_cb.call1(&JsValue::NULL, &JsValue::from_str(&msg));
             }
         }
 
         // Apply the piece (bump each touched cell by +1 mod figures_count) and update the
-        // running sum. Going through a separate `#[inline(always)]` helper turned out to
-        // produce tighter wasm than inlining the loop body manually (LLVM seems to
-        // optimize the smaller function context better; benchmarked +14% when manually
-        // inlined).
-        let indices: &[usize] =
-            unsafe { piece.indices_by_position.get_unchecked(pos_arr_idx) };
-        let delta = apply_piece(&mut m.state.board, indices, figures_count);
+        // running sum. The engine handles the actual mutation — see `BoardEngine` impls
+        // for the u8 vs packed bit-plane paths. Going through the inline trait method
+        // is monomorphized away at compile time.
+        let delta = m.state.engine.apply(piece, pos_arr_idx, figures_count);
         m.state.board_sum = (m.state.board_sum as i64 + delta) as usize;
 
         // Influence-bound early exit.
         let transforms_needed = completed_sum as i64 - m.state.board_sum as i64;
         if transforms_needed > max_cells_at_left as i64 {
-            revert_piece(&mut m.state.board, indices, figures_count);
+            m.state.engine.revert(piece, pos_arr_idx, figures_count);
             m.state.board_sum = (m.state.board_sum as i64 - delta) as usize;
-            m.meta.skipped_impossible_situations += skip_product;
+            if should_count {
+                m.meta.skipped_impossible_situations += skip_product;
+            }
             continue;
         }
 
@@ -1280,10 +1468,12 @@ fn iter_placements_inner(ctx: &IterCtx, m: &mut IterMutState, depth: usize) {
         });
 
         if next_count > 0 {
-            iter_placements_inner(ctx, m, depth + 1);
+            iter_placements_inner(ctx, m, depth + 1, i_pos);
         } else {
             // Leaf — check for solution. Sum equality is sufficient (see brute_force_one_start comment).
-            m.meta.total_number_of_tried_combinations += 1.0;
+            if should_count {
+                m.meta.total_number_of_tried_combinations += 1.0;
+            }
             if m.state.board_sum == completed_sum {
                 let parts = materialize_solution_parts(
                     ctx.pieces,
@@ -1307,7 +1497,7 @@ fn iter_placements_inner(ctx: &IterCtx, m: &mut IterMutState, depth: usize) {
             }
         }
 
-        revert_piece(&mut m.state.board, indices, figures_count);
+        m.state.engine.revert(piece, pos_arr_idx, figures_count);
         m.state.board_sum = (m.state.board_sum as i64 - delta) as usize;
         m.state.placement_stack.pop();
     }
@@ -1339,6 +1529,155 @@ fn revert_piece(board: &mut [u8], indices: &[usize], figures_count: u8) {
         unsafe {
             *board.get_unchecked_mut(idx) = nv;
         }
+    }
+}
+
+// ============================================================================
+// BoardEngine: abstraction over the working board so the brute-force recursion
+// can run unchanged on either a flat u8 board or a bit-plane packed board.
+// ============================================================================
+//
+// The bit-plane representation packs an N-cell board (N ≤ 64) into `BITS`
+// u64 "planes", one per bit position of a cell's value. So for fc=2 we use one
+// plane (1 bit/cell); for fc∈{3,4} two planes; for fc∈{5..=8} three planes;
+// for fc∈{9..=16} four planes. Per `apply`:
+//
+//   1. Count cells in `mask` currently at value `fc-1` (the ones that will
+//      roll over to 0). With each plane being a u64 we get that count as
+//      `popcount(match_value & mask)` where `match_value` is built by ANDing
+//      together either `plane[k]` or `!plane[k]` per bit `k` of `fc-1`. That
+//      single `c` lets us compute the sum delta in one shot:
+//          delta = popcount(mask) − fc · c
+//      because cells with old value < fc-1 contribute +1 and cells at fc-1
+//      contribute -(fc-1) overall: (touched − c) · 1 + c · −(fc-1).
+//   2. Ripple-add 1 to each `mask` cell with cell-parallel bitwise carry:
+//      for plane k, `new_plane = plane ^ carry`, `next_carry = plane & carry`.
+//   3. If `fc < 2^BITS` (e.g. fc=3 in a 2-plane board), the natural mod 2^BITS
+//      doesn't suffice: cells that landed on the value `fc` must be reset to 0.
+//      Detect them with the same ANDed-plane trick on the bit pattern of `fc`,
+//      then `plane[k] &= !match_fc` per plane.
+//
+// Revert is a snapshot stack: every `apply` pushes the pre-state planes onto a
+// per-engine stack, every `revert` pops back. That's O(BITS) per call vs a
+// piece-position-dependent loop, and the snapshot itself is a `Copy` of
+// `[u64; BITS]` (at most 32 bytes) so the stack stays cache-hot.
+trait BoardEngine: Sized {
+    fn from_grid(grid: &Grid, figures_count: u8) -> Self;
+    /// Apply piece's increment at this position. Returns delta to the running sum.
+    fn apply(&mut self, piece: &PuzzlePiece, pos_array_idx: usize, fc: u8) -> i64;
+    /// Undo the most recent `apply` (matched 1-to-1 with `apply` calls).
+    fn revert(&mut self, piece: &PuzzlePiece, pos_array_idx: usize, fc: u8);
+}
+
+struct U8Engine {
+    board: Vec<u8>,
+}
+
+impl BoardEngine for U8Engine {
+    #[inline(always)]
+    fn from_grid(grid: &Grid, _fc: u8) -> Self {
+        Self { board: grid.data.clone() }
+    }
+
+    #[inline(always)]
+    fn apply(&mut self, piece: &PuzzlePiece, pos_array_idx: usize, fc: u8) -> i64 {
+        let indices = unsafe { piece.indices_by_position.get_unchecked(pos_array_idx) };
+        apply_piece(&mut self.board, indices, fc)
+    }
+
+    #[inline(always)]
+    fn revert(&mut self, piece: &PuzzlePiece, pos_array_idx: usize, fc: u8) {
+        let indices = unsafe { piece.indices_by_position.get_unchecked(pos_array_idx) };
+        revert_piece(&mut self.board, indices, fc);
+    }
+}
+
+struct PackedEngine<const BITS: usize> {
+    planes: [u64; BITS],
+    /// Snapshot stack for backtracking. Each entry is the full plane state from
+    /// before an `apply`; `revert` pops and restores. Capacity preallocated to
+    /// `unused.len()` in `brute_force_one_start` so this never reallocates.
+    snapshots: Vec<[u64; BITS]>,
+}
+
+impl<const BITS: usize> BoardEngine for PackedEngine<BITS> {
+    fn from_grid(grid: &Grid, _fc: u8) -> Self {
+        let mut planes = [0u64; BITS];
+        debug_assert!(grid.data.len() <= 64);
+        for (i, &v) in grid.data.iter().enumerate() {
+            for k in 0..BITS {
+                if (v >> k) & 1 == 1 {
+                    planes[k] |= 1u64 << i;
+                }
+            }
+        }
+        Self { planes, snapshots: Vec::new() }
+    }
+
+    #[inline(always)]
+    fn apply(&mut self, piece: &PuzzlePiece, pos_array_idx: usize, fc: u8) -> i64 {
+        // snapshot()
+        self.snapshots.push(self.planes);
+
+        let mask = unsafe { *piece.mask_by_position.get_unchecked(pos_array_idx) };
+        let mask_popcount = unsafe { *piece.mask_popcount_by_position.get_unchecked(pos_array_idx) };
+
+        // c = how many of the touched cells currently hold value fc-1
+        let v = fc - 1;
+        let mut match_v: u64 = !0u64;
+        for k in 0..BITS {
+            if (v >> k) & 1 == 1 {
+                match_v &= self.planes[k];
+            } else {
+                match_v &= !self.planes[k];
+            }
+        }
+        let c = (match_v & mask).count_ones() as i64;
+
+        // Ripple-add 1 to every cell in `mask`.
+        let mut carry = mask;
+        for k in 0..BITS {
+            let new_carry = self.planes[k] & carry;
+            self.planes[k] ^= carry;
+            carry = new_carry;
+        }
+        // If fc == 2^BITS exactly, the final `carry` (out of the top plane) is the
+        // legitimate mod-2^BITS wraparound and is simply discarded.
+
+        // For non-power-of-2 fc, reset cells whose new value landed on fc.
+        if (fc as usize) < (1usize << BITS) {
+            let mut match_fc: u64 = !0u64;
+            for k in 0..BITS {
+                if (fc >> k) & 1 == 1 {
+                    match_fc &= self.planes[k];
+                } else {
+                    match_fc &= !self.planes[k];
+                }
+            }
+            for k in 0..BITS {
+                self.planes[k] &= !match_fc;
+            }
+        }
+
+        mask_popcount as i64 - (fc as i64) * c
+    }
+
+    #[inline(always)]
+    fn revert(&mut self, _piece: &PuzzlePiece, _pos_array_idx: usize, _fc: u8) {
+        // The snapshot stack is matched 1:1 with `apply`s in the recursion, so a
+        // missing pop here would be a bug rather than a recoverable state. Using
+        // `unwrap_or_default` would silently mask it.
+        self.planes = self.snapshots.pop().expect("PackedEngine revert without matching apply");
+    }
+}
+
+fn bits_per_cell_for(fc: u8) -> Option<usize> {
+    match fc {
+        2 => Some(1),
+        3..=4 => Some(2),
+        5..=8 => Some(3),
+        9..=16 => Some(4),
+        _ => None,
     }
 }
 
@@ -1459,6 +1798,22 @@ fn fmt_num(n: f64) -> String {
     format!("{}{}", sign, grouped)
 }
 
+// Throughput-as-a-percentage of total combinations per second is usually a tiny
+// number (e.g. 1e-8 %/s on big puzzles), so format by significant digits instead
+// of fixed decimals — `{:.2}` would always render 0.
+fn fmt_small_percentage(n: f64) -> String {
+    if !n.is_finite() || n == 0.0 {
+        return "0".to_string();
+    }
+    let abs = n.abs();
+    if abs >= 0.01 {
+        format!("{:.4}", n)
+    } else {
+        // 4 significant digits, scientific notation for very small values.
+        format!("{:.3e}", n)
+    }
+}
+
 fn fmt_duration(ms: f64) -> String {
     if ms < 1000.0 {
         format!("{} milliseconds", fmt_num(ms))
@@ -1508,12 +1863,123 @@ pub fn solve(
 
     puzzle.brute_force_solution();
 
-    let out = puzzle.into_output();
+    let out = puzzle.take_output();
     let serializer = serde_wasm_bindgen::Serializer::new()
         .serialize_maps_as_objects(true)
         .serialize_large_number_types_as_bigints(false);
     out.serialize(&serializer)
         .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
+}
+
+// Per-worker cache: each web worker has its own thread_local. When a Calculate
+// comes in with the same PuzzleOptions as the previous one, we reuse the parsed
+// Puzzle (precomputed piece positions etc.) and just reset the per-call state.
+// Skips the parse + sliding-window precompute step that 16 workers were otherwise
+// each redoing per Calculate.
+thread_local! {
+    static CACHED_PUZZLE: RefCell<Option<(u64, Puzzle)>> = const { RefCell::new(None) };
+}
+
+fn fingerprint_opts(opts: &PuzzleOptionsIn) -> u64 {
+    let mut h = DefaultHasher::new();
+    for f in &opts.figures {
+        match f {
+            FigureNameIn::Str(s) => {
+                0u8.hash(&mut h);
+                s.hash(&mut h);
+            }
+            FigureNameIn::Num(n) => {
+                1u8.hash(&mut h);
+                // f64 doesn't implement Hash, so hash the bit pattern. Distinct
+                // NaN payloads will fingerprint differently, which is fine — the
+                // worst case is a needless rebuild.
+                n.to_bits().hash(&mut h);
+            }
+        }
+    }
+    opts.game_board.hash(&mut h);
+    opts.puzzle_pieces.hash(&mut h);
+    h.finish()
+}
+
+/// Like `solve`, but processes only the tasks assigned to this worker out of `num_workers`.
+///
+/// Slicing happens at "task depth": for puzzles with ≥ 2 unused puzzle pieces (the common
+/// case) that's depth 1 of the recursion — task index = `root_pos_i * num_depth1_positions
+/// + depth1_pos_i`, and worker `w` processes indices where `task_idx % num_workers == w`.
+/// For puzzles with exactly one unused piece, slicing falls back to depth 0.
+///
+/// `stop_cb` is polled every ~65k attempts (same throttle as the time check). Typically
+/// backed by an `Atomics.load` on a `SharedArrayBuffer` so the orchestrator can broadcast
+/// "first worker found a solution, everyone bail" cheaply.
+#[wasm_bindgen]
+pub fn solve_slice(
+    options_js: JsValue,
+    settings_js: JsValue,
+    status_cb: Function,
+    num_workers: u32,
+    worker_index: u32,
+    stop_cb: Option<Function>,
+) -> Result<JsValue, JsValue> {
+    let options: PuzzleOptionsIn = serde_wasm_bindgen::from_value(options_js)
+        .map_err(|e| JsValue::from_str(&format!("Invalid PuzzleOptions: {}", e)))?;
+    let settings: SettingsIn = serde_wasm_bindgen::from_value(settings_js).unwrap_or_default();
+
+    if num_workers == 0 || worker_index >= num_workers {
+        return Err(JsValue::from_str(
+            "solve_slice: invalid (num_workers, worker_index) pair",
+        ));
+    }
+
+    let fp = fingerprint_opts(&options);
+
+    // Pull the cached Puzzle out (if it matches), or build a new one. Putting
+    // it back into the cache at the end completes the rotation.
+    let mut puzzle = CACHED_PUZZLE.with(|c| {
+        let mut c = c.borrow_mut();
+        match c.as_ref() {
+            Some((cached_fp, _)) if *cached_fp == fp => c.take().map(|(_, p)| p),
+            _ => None,
+        }
+    });
+
+    let mut puzzle: Puzzle = if let Some(mut p) = puzzle.take() {
+        p.reset_for_solve(status_cb);
+        p
+    } else {
+        Puzzle::new(options, status_cb)
+    };
+
+    puzzle.slice_ctx = Some(SliceCtxOwned {
+        worker_index,
+        num_workers,
+        stop_cb,
+    });
+
+    if settings.prepare_possible_solution_starts {
+        puzzle.prepare_possible_solution_starts();
+    }
+
+    puzzle.brute_force_solution();
+
+    // Workers > 0 send only the per-slice fields. The orchestrator reconstructs
+    // the full puzzle payload from worker 0's response.
+    let serializer = serde_wasm_bindgen::Serializer::new()
+        .serialize_maps_as_objects(true)
+        .serialize_large_number_types_as_bigints(false);
+    let result = if worker_index == 0 {
+        puzzle.take_output().serialize(&serializer)
+    } else {
+        puzzle.take_slice_output().serialize(&serializer)
+    };
+
+    // Return the Puzzle to the cache so the next Calculate with the same opts
+    // can skip the parse + sliding-window precompute.
+    CACHED_PUZZLE.with(|c| {
+        *c.borrow_mut() = Some((fp, puzzle));
+    });
+
+    result.map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
 }
 
 #[cfg(test)]

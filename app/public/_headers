@@ -1,0 +1,12 @@
+# Netlify: enable `crossOriginIsolated` so the browser exposes
+# `SharedArrayBuffer` — needed by the multi-threaded solver to broadcast
+# its "first worker found a solution, everyone bail" stop flag.
+#
+# `credentialless` (rather than `require-corp`) means cross-origin resources
+# without explicit CORP/CORS headers still load, just without credentials.
+# That's important for the Neopets figure GIFs (https://images.neopets.com/…)
+# we show in the result UI — they're public images so loading them
+# anonymously is fine.
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: credentialless
