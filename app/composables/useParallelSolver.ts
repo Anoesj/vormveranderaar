@@ -25,14 +25,18 @@ export function isCrossOriginIsolated () {
 }
 
 /**
- * Recommended worker count for the parallel solver. Capped at the smaller of
- * `hardwareConcurrency` and 8 — beyond that, depth-0 root-piece duplication and
- * postMessage round-trips start to chip away at marginal returns. Returns 1 when
- * threading isn't beneficial.
+ * Recommended worker count for the parallel solver. Defers to
+ * `navigator.hardwareConcurrency` with a sanity cap at 32 (just in case some
+ * browser reports an absurd value). Returns 1 when threading isn't beneficial.
+ *
+ * Per-worker overhead is small (depth-0 root-piece duplication is microseconds,
+ * wasm instantiate happens in parallel across workers, postMessage round-trips
+ * are sub-millisecond) so the limiting factor is just physical/SMT cores —
+ * which is exactly what `hardwareConcurrency` reflects.
  */
 export function recommendedWorkerCount () {
   const hc = (globalThis.navigator?.hardwareConcurrency ?? 1) | 0;
-  return Math.max(1, Math.min(hc, 8));
+  return Math.max(1, Math.min(hc, 32));
 }
 
 type MergedResult = {
