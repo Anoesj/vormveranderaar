@@ -5,5 +5,8 @@ import vueTsEslint from '@anoesj/eslint-config-vue-ts';
 import { config } from 'typescript-eslint';
 
 export default config(
+  {
+    ignores: ['wasm/**'],
+  },
   ...vueTsEslint(),
 );
