@@ -3,6 +3,8 @@
 - `bun i`
 - `bun --bun run dev` to start Nuxt. The `--bun` flag will force Nuxt to use `bun` instead of `node`.
 
+The pre-built WebAssembly solver lives under `wasm/solver/pkg/` and is checked into the repo, so nothing extra is needed for day-to-day work. If you change the Rust source, see ["Rebuilding the wasm solver"](#rebuilding-the-wasm-solver).
+
 ## Building the app
 - `bun --bun run build` to build the app.
 
@@ -10,7 +12,32 @@ In order to test the Netlify build locally and preview it, run: `NETLIFY=true bu
 
 ## Technical info
 ### Solving the puzzle
-Todo
+The puzzle solver runs in two places:
+
+- **In the browser** (default, and the only path on the Netlify deploy) — a single web worker (`app/utils/shapeshifterWorker.ts`) loads a WebAssembly module compiled from the Rust crate at `wasm/solver/` and calls its `solve(options, settings, statusCb)` entry point. The Rust code re-implements the brute-force pipeline and the optional "prepare possible solution starts" phase, and streams `Still thinking…` updates back through a JS callback. Parallelization across multiple workers is on the roadmap; today the worker runs single-threaded.
+- **In the Bun-powered server** (local dev only, toggle the "Calculate in-browser" switch off) — `server/api/calculate-solutions.post.ts` still uses the original TypeScript `Puzzle` class under `server/utils/shapeshifter/`. This path is kept around for parity testing and so the existing TS implementation stays runnable.
+
+Both paths produce the same JSON shape, so the Vue components (`app/components/Solution.vue`, `PossibleSolutionStart.vue`, `Grid.vue`, …) don't care which solver ran.
+
+#### Rebuilding the wasm solver
+Prerequisites (one-time):
+
+```
+rustup target add wasm32-unknown-unknown
+cargo install wasm-pack
+```
+
+Then:
+
+```
+bun run build:wasm
+```
+
+That runs `wasm-pack build wasm/solver --target web --release --out-dir pkg` and strips wasm-pack's auto-generated `pkg/.gitignore` so the artifacts stay committed. The output (`solver.js`, `solver_bg.wasm`, `solver.d.ts`) is imported directly by the web worker via Vite's `?url` asset handling. We deliberately commit `wasm/solver/pkg/` so Netlify (which doesn't have Rust) can build the static site without invoking `wasm-pack`.
+
+Notes:
+- `wasm-opt` is disabled in `Cargo.toml` (it downloads a binary at build time that isn't always reachable). The rustc release profile (`opt-level = 3`, `lto = true`, `codegen-units = 1`) already produces a small wasm (~200 kB, ~77 kB gzipped).
+- The Rust crate has no special workspace setup — it's a plain `cdylib` + `rlib` crate. Tests can be added as standard `#[cfg(test)]` Rust tests and run with `cargo test --target x86_64-unknown-linux-gnu` (i.e. natively, not under wasm).
 
 ### Findings
 - In `Puzzle`, when turning `*puzzlePiecePlacementOptionsIterator` into an `AsyncGenerator`, it gets about 8% slower.
@@ -28,3 +55,4 @@ Todo
 - Early returns for the win. Stop executing code as soon as possible in the brute force iterator.
 - What made the most difference is counting how many cells the following puzzle pieces can influence at max and checking if the number of incorrect cells is more than that. This way, we can skip a lot of unnecessary iterations.
 - Nested generators are awesome but complicated. I want to try using regular function recursion and see if there's any perf gains there.
+- The Rust port uses plain function recursion (no generators — Rust doesn't have JS-style generators) and pre-computes, for every `(piece, position)` pair, the list of flat game-board indices the piece's `1`-cells occupy. Placing a piece during brute force is then just a tight `for &idx in indices: board[idx] = (board[idx] + 1) % figuresCount` loop, which avoids the per-iteration grid allocation/copy the JS version pays for.
