@@ -100,25 +100,26 @@ async function benchEngine(engineLabel, runFn, opts, runs) {
   times.sort((a, b) => a - b);
   const best = times[0];
   const median = times[Math.floor(times.length / 2)];
-  origLog(`  ${engineLabel.padEnd(12)} best=${best.toFixed(1).padStart(8)}ms  median=${median.toFixed(1).padStart(8)}ms  solutions=${solutionsLen}  attempts=${meta.totalNumberOfIteratorPlacementAttempts}  skippedImpossible=${meta.skippedImpossibleSituations}`);
+  origLog(`  ${engineLabel.padEnd(12)} best=${best.toFixed(1).padStart(8)}ms  median=${median.toFixed(1).padStart(8)}ms  solutions=${solutionsLen}  attempts=${meta.totalNumberOfIteratorPlacementAttempts}  skippedImpossible=${meta.skippedImpossibleSituations}  skippedDup=${meta.skippedDuplicateSituations}`);
   return { best, median, meta, solutionsLen };
 }
 
 const target = process.argv[2] || 'all';
 const runs = Number(process.argv[3] || 3);
 const engines = (process.argv[4] || 'both').toLowerCase();
+const prepareFlag = (process.argv[5] || '').toLowerCase() === 'prepare';
 const runWasm = engines === 'both' || engines === 'wasm';
 const runJs   = engines === 'both' || engines === 'js';
+const settings = { preparePossibleSolutionStarts: prepareFlag };
 
-origLog(`# Benchmark (target=${target}, runs=${runs}, engines=${engines})`);
+origLog(`# Benchmark (target=${target}, runs=${runs}, engines=${engines}, prepare=${prepareFlag})`);
 origLog('# Warming up...');
-if (runWasm) solve(cases.level10, { preparePossibleSolutionStarts: false }, () => {});
-if (runJs)   await solveJs(cases.level10, { preparePossibleSolutionStarts: false });
+if (runWasm) solve(cases.level10, settings, () => {});
+if (runJs)   await solveJs(cases.level10, settings);
 
 for (const [name, opts] of Object.entries(cases)) {
   if (target !== 'all' && target !== name) continue;
   origLog(`\n## ${name}`);
-  const settings = { preparePossibleSolutionStarts: false };
   if (runJs)   await benchEngine('js',   (o) => solveJs(o, settings),                            opts, runs);
   if (runWasm) await benchEngine('wasm', (o) => Promise.resolve(solve(o, settings, () => {})),    opts, runs);
 }

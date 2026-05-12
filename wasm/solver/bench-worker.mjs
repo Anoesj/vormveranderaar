@@ -2,10 +2,11 @@
 // output in dist/_nuxt/), and the JS solver directly under Bun. Run after `bun --bun
 // run build` (or `bun --bun nuxt build`) — exits with a hint otherwise.
 //
-//   bun --bun run wasm/solver/bench-worker.mjs              # both engines, all puzzles
-//   bun --bun run wasm/solver/bench-worker.mjs level34      # both engines, one puzzle
+//   bun --bun run wasm/solver/bench-worker.mjs                       # both engines, all puzzles
+//   bun --bun run wasm/solver/bench-worker.mjs level34               # both engines, one puzzle
 //   bun --bun run wasm/solver/bench-worker.mjs level34 5 js
 //   bun --bun run wasm/solver/bench-worker.mjs level34 5 wasm
+//   bun --bun run wasm/solver/bench-worker.mjs level34 5 both prepare # with preparePossibleSolutionStarts: true
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -149,7 +150,8 @@ async function benchEngine (label, runFn, opts, runs) {
     `  ${label.padEnd(12)} best=${best.toFixed(1).padStart(8)}ms  ` +
     `median=${median.toFixed(1).padStart(8)}ms  ` +
     `solutions=${solutionsLen}  attempts=${meta.totalNumberOfIteratorPlacementAttempts}  ` +
-    `skippedImpossible=${meta.skippedImpossibleSituations}`,
+    `skippedImpossible=${meta.skippedImpossibleSituations}  ` +
+    `skippedDuplicate=${meta.skippedDuplicateSituations}`,
   );
   return { best, median, meta, solutionsLen };
 }
@@ -157,10 +159,12 @@ async function benchEngine (label, runFn, opts, runs) {
 const target = process.argv[2] || 'all';
 const runs = Number(process.argv[3] || 3);
 const engines = (process.argv[4] || 'both').toLowerCase();
+const prepareFlag = (process.argv[5] || '').toLowerCase() === 'prepare';
 const runWasm = engines === 'both' || engines === 'wasm';
 const runJs   = engines === 'both' || engines === 'js';
+const settings = { preparePossibleSolutionStarts: prepareFlag };
 
-origLog(`# Benchmark (target=${target}, runs=${runs}, engines=${engines})`);
+origLog(`# Benchmark (target=${target}, runs=${runs}, engines=${engines}, prepare=${prepareFlag})`);
 origLog(`# Worker: ${path.relative(repoRoot, workerPath)}`);
 
 let wasmRunner = null;
@@ -168,16 +172,15 @@ if (runWasm) {
   wasmRunner = makeWasmRunner();
   // Warm-up: discard the first round-trip, which includes wasm instantiate.
   origLog('# Warming up worker (wasm instantiate)...');
-  await wasmRunner.run(cases.level10, { preparePossibleSolutionStarts: false });
+  await wasmRunner.run(cases.level10, settings);
 }
 if (runJs) {
-  await solveJs(cases.level10, { preparePossibleSolutionStarts: false });
+  await solveJs(cases.level10, settings);
 }
 
 for (const [name, opts] of Object.entries(cases)) {
   if (target !== 'all' && target !== name) continue;
   origLog(`\n## ${name}`);
-  const settings = { preparePossibleSolutionStarts: false };
   if (runJs)   await benchEngine('js',          (o) => solveJs(o, settings), opts, runs);
   if (runWasm) await benchEngine('wasm-worker', (o) => wasmRunner.run(o, settings), opts, runs);
 }
