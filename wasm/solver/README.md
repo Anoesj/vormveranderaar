@@ -45,6 +45,32 @@ bun run build:wasm
 The build artifacts under `pkg/` are committed so deploys without a Rust
 toolchain (e.g. Netlify static) just work.
 
+## Benchmarking
+
+Two scripts compare the wasm solver against the original TypeScript `Puzzle`
+on a few sample puzzles (`level10`, `level18`, `level34`). Both run under Bun.
+
+- **`bench.mjs`** loads the wasm module directly from `pkg/`. Useful when you
+  want fast iteration on the Rust code — no Vite/Nuxt build step required.
+  ```
+  bun --bun run wasm/solver/bench.mjs              # both engines, all puzzles
+  bun --bun run wasm/solver/bench.mjs level34      # one puzzle
+  bun --bun run wasm/solver/bench.mjs level34 7 wasm   # wasm only, 7 runs
+  ```
+- **`bench-worker.mjs`** runs the wasm path through the *built* worker file
+  (Vite output in `dist/_nuxt/`), giving production-realistic numbers
+  including `postMessage` round-trips. Run `bun --bun nuxt build` (or
+  `NITRO_PRESET=netlify-static bun --bun nuxt build`) first.
+  ```
+  bun --bun nuxt build
+  bun --bun run wasm/solver/bench-worker.mjs level34 7 both
+  ```
+
+The JS path in both scripts calls the existing `server/utils/shapeshifter/Puzzle`
+directly under Bun (via `js-wrapper.mjs`, which stubs the few Nuxt
+auto-imports and the worker-only `postMessage` global the TypeScript code
+expects).
+
 ## Layout
 
 - `src/lib.rs` — the entire solver. One file, top-to-bottom: JS I/O types

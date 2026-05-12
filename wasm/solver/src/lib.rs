@@ -192,6 +192,7 @@ impl Grid {
         s
     }
 
+    #[allow(dead_code)]
     fn every_is(&self, v: u8) -> bool {
         self.data.iter().all(|&x| x == v)
     }
@@ -259,14 +260,19 @@ struct PuzzlePiece {
     #[allow(dead_code)]
     can_avoid_edges: bool,
     can_avoid_affecting_some_corners: bool,
+    /// All possible top-left positions of the piece on the game board.
     possible_positions: Vec<PositionOut>,
-    possible_positions_where_corners_not_affected: Vec<PositionOut>,
-    /// For each possible position, flat indices in game-board where the piece's 1-cells land.
-    indices_by_position_index: Vec<Vec<usize>>,
-    /// For each possible position, an empty-game-board sized grid with the piece placed.
-    grid_by_position_index: Vec<Grid>,
-    /// Position -> index in `possible_positions` (and the vecs above).
-    position_index_by_xy: std::collections::HashMap<(usize, usize), usize>,
+    /// For each entry in `possible_positions`, flat game-board indices where the piece's
+    /// 1-cells land. The brute-force inner loop reads these as a `&[usize]`.
+    indices_by_position: Vec<Vec<usize>>,
+    /// For each entry in `possible_positions`, an empty-game-board sized grid with the
+    /// piece placed at that position. Only used when materializing solution output.
+    grid_by_position: Vec<Grid>,
+    /// `(0..possible_positions.len()).collect()`. Kept so the inner loop can iterate
+    /// the same `&[usize]` regardless of whether we're avoiding corner-touching positions.
+    all_position_indices: Vec<usize>,
+    /// Indices into `possible_positions` that don't touch any game-board corner.
+    corner_safe_position_indices: Vec<usize>,
 }
 
 impl PuzzlePiece {
@@ -311,16 +317,13 @@ impl PuzzlePiece {
                 && !spans_y);
 
         let mut possible_positions = Vec::new();
-        let mut indices_by_position_index = Vec::new();
-        let mut grid_by_position_index = Vec::new();
-        let mut position_index_by_xy = std::collections::HashMap::new();
+        let mut indices_by_position: Vec<Vec<usize>> = Vec::new();
+        let mut grid_by_position: Vec<Grid> = Vec::new();
 
         if game_board.rows >= grid.rows && game_board.cols >= grid.cols {
             for y in 0..=(game_board.rows - grid.rows) {
                 for x in 0..=(game_board.cols - grid.cols) {
-                    let pos_idx = possible_positions.len();
                     possible_positions.push(PositionOut { x, y });
-                    position_index_by_xy.insert((x, y), pos_idx);
 
                     let mut indices = Vec::new();
                     let mut placed = Grid::empty_like(game_board);
@@ -336,25 +339,27 @@ impl PuzzlePiece {
                             }
                         }
                     }
-                    indices_by_position_index.push(indices);
-                    grid_by_position_index.push(placed);
+                    indices_by_position.push(indices);
+                    grid_by_position.push(placed);
                 }
             }
         }
 
-        let mut possible_positions_where_corners_not_affected = Vec::new();
+        let mut corner_safe_position_indices = Vec::new();
         let gcols = game_board.cols;
         let grows = game_board.rows;
-        for (i, p) in possible_positions.iter().enumerate() {
-            let placed = &grid_by_position_index[i];
+        for (i, _) in possible_positions.iter().enumerate() {
+            let placed = &grid_by_position[i];
             let tl = placed.data[0] == 0;
             let tr = placed.data[gcols - 1] == 0;
             let bl = placed.data[(grows - 1) * gcols] == 0;
             let br = placed.data[grows * gcols - 1] == 0;
             if tl && tr && bl && br {
-                possible_positions_where_corners_not_affected.push(*p);
+                corner_safe_position_indices.push(i);
             }
         }
+
+        let all_position_indices: Vec<usize> = (0..possible_positions.len()).collect();
 
         PuzzlePiece {
             id,
@@ -366,30 +371,29 @@ impl PuzzlePiece {
             can_avoid_edges,
             can_avoid_affecting_some_corners,
             possible_positions,
-            possible_positions_where_corners_not_affected,
-            indices_by_position_index,
-            grid_by_position_index,
-            position_index_by_xy,
+            indices_by_position,
+            grid_by_position,
+            all_position_indices,
+            corner_safe_position_indices,
         }
     }
 
-    fn get_possible_positions(&self, avoid_corners: bool) -> &[PositionOut] {
+    #[inline]
+    fn position_indices(&self, avoid_corners: bool) -> &[usize] {
         if avoid_corners {
-            &self.possible_positions_where_corners_not_affected
+            &self.corner_safe_position_indices
         } else {
-            &self.possible_positions
+            &self.all_position_indices
         }
     }
 
-    /// Returns the empty-board-sized grid with the piece placed at `pos`.
-    fn placed_grid(&self, pos: PositionOut) -> &Grid {
-        let idx = self.position_index_by_xy[&(pos.x, pos.y)];
-        &self.grid_by_position_index[idx]
-    }
-
-    fn placed_indices(&self, pos: PositionOut) -> &[usize] {
-        let idx = self.position_index_by_xy[&(pos.x, pos.y)];
-        &self.indices_by_position_index[idx]
+    #[inline]
+    fn position_count(&self, avoid_corners: bool) -> usize {
+        if avoid_corners {
+            self.corner_safe_position_indices.len()
+        } else {
+            self.possible_positions.len()
+        }
     }
 }
 
@@ -467,9 +471,6 @@ struct Puzzle {
     solutions: Vec<PossibleSolutionOut>,
     has_prepared_solution_starts: bool,
     unique_situations: HashSet<String>,
-    /// For brute force: max_cells_influenced[puzzle_pieces_left_after_current] = sum of next pieces' cellsInfluenced.
-    /// Sized to current solution start's unused puzzle pieces count + 1.
-    max_cells_influenced_per_left: Vec<usize>,
     meta: MetaOut,
     t_start: f64,
     t_last_still_thinking: f64,
@@ -535,7 +536,6 @@ impl Puzzle {
             solutions: Vec::new(),
             has_prepared_solution_starts: false,
             unique_situations: HashSet::new(),
-            max_cells_influenced_per_left: Vec::new(),
             meta,
             t_start: now_ms(),
             t_last_still_thinking: now_ms(),
@@ -719,15 +719,6 @@ impl Puzzle {
         out
     }
 
-    fn stack_indices(&self, base: &Grid, indices: &[usize]) -> Grid {
-        let mut out = base.clone();
-        let figures_count = self.figures_count;
-        for &idx in indices {
-            out.data[idx] = (out.data[idx] + 1) % figures_count;
-        }
-        out
-    }
-
     fn prepare_possible_solution_starts(&mut self) {
         // For each (topLeft, topRight, bottomLeft, bottomRight) combination of corner combos,
         // check compatibility and build a possible solution start.
@@ -840,7 +831,12 @@ impl Puzzle {
                             Vec::with_capacity(parts_sorted.len());
                         for part in &parts_sorted {
                             let piece = self.piece_by_id(&part.id);
-                            let placed = piece.placed_grid(part.position).clone();
+                            let pos_idx = piece
+                                .possible_positions
+                                .iter()
+                                .position(|p| p.x == part.position.x && p.y == part.position.y)
+                                .expect("position exists");
+                            let placed = piece.grid_by_position[pos_idx].clone();
                             let before = previous_board.clone();
                             let after = self.stack_into(&previous_board, &placed);
                             previous_board = after.clone();
@@ -883,7 +879,7 @@ impl Puzzle {
             unused.sort_by(|a, b| b.cells_influenced.cmp(&a.cells_influenced));
             let mut combos: f64 = 1.0;
             for p in &unused {
-                combos *= p.get_possible_positions(true).len() as f64;
+                combos *= p.position_count(true) as f64;
             }
             start.continuation_info = Some(ContinuationInfoOut {
                 unused_puzzle_pieces_count: unused.len(),
@@ -963,9 +959,7 @@ impl Puzzle {
 
         let mut combos: f64 = 1.0;
         for &i in &unused_indices {
-            combos *= self.puzzle_pieces[i]
-                .get_possible_positions(avoid_corners)
-                .len() as f64;
+            combos *= self.puzzle_pieces[i].position_count(avoid_corners) as f64;
         }
 
         // Refresh continuation info on the solution start.
@@ -975,8 +969,8 @@ impl Puzzle {
                 unused_puzzle_pieces_possible_combinations: combos,
             });
 
-        // Determine the game board so far.
-        let game_board_so_far = match self.possible_solution_starts[start_index].parts.last() {
+        // Determine the game board so far (and its sum).
+        let initial_board: Grid = match self.possible_solution_starts[start_index].parts.last() {
             Some(p) => {
                 let after = p
                     .after
@@ -986,9 +980,12 @@ impl Puzzle {
             }
             None => self.game_board.clone(),
         };
+        let initial_board_sum = initial_board.sum();
+        let completed_sum = self.game_board_completed_sum;
 
-        let is_solution_already = game_board_so_far.every_is(self.target_figure);
-        // Set isSolution on the last part's `after` grid (matches JS behavior).
+        // Since 0 <= cell <= target = figures_count - 1, sum <= completed_sum, with equality iff every cell == target.
+        // This makes the solution check O(1) once we maintain a running sum.
+        let is_solution_already = initial_board_sum == completed_sum;
         if let Some(last) = self.possible_solution_starts[start_index]
             .parts
             .last_mut()
@@ -1013,185 +1010,88 @@ impl Puzzle {
             return;
         }
 
-        // Check duplicate-situation skip.
+        // Duplicate-situation skip.
         let key = {
-            let mut s = String::new();
+            let mut s = String::with_capacity(unused_indices.len() + initial_board.data.len());
             for &i in &unused_indices {
                 s.push_str(&self.puzzle_pieces[i].id);
             }
-            s.push_str(&game_board_so_far.short_string());
+            s.push_str(&initial_board.short_string());
             s
         };
-        if self.unique_situations.contains(&key) {
+        if !self.unique_situations.insert(key) {
             self.meta.skipped_duplicate_situations += combos;
             return;
         }
-        self.unique_situations.insert(key);
 
-        // Build max_cells_influenced_per_left vector.
-        // index = puzzle_pieces_left_after_current = next.len()
-        // max_cells_influenced_per_left[k] = sum of cellsInfluenced over the last k pieces (in placement order)
+        // max_cells_influenced[k] = sum of cellsInfluenced over the last k pieces (in placement order).
         let n = unused_indices.len();
         let mut max_cells = vec![0usize; n + 1];
         let mut acc = 0usize;
         for k in 0..n {
             max_cells[k] = acc;
-            let piece_idx = unused_indices[n - 1 - k];
-            acc += self.puzzle_pieces[piece_idx].cells_influenced;
+            acc += self.puzzle_pieces[unused_indices[n - 1 - k]].cells_influenced;
         }
         max_cells[n] = acc;
-        self.max_cells_influenced_per_left = max_cells;
+
+        // suffix_product[k] = product of position counts for pieces at depths k..n. Used when
+        // adding to `skippedImpossibleSituations` after an early skip — instead of multiplying
+        // through `next.len()` entries on every skip, we just read `suffix_product[depth + 1]`.
+        let mut suffix_product: Vec<f64> = vec![1.0; n + 1];
+        for k in (0..n).rev() {
+            suffix_product[k] = suffix_product[k + 1]
+                * (self.puzzle_pieces[unused_indices[k]].position_count(avoid_corners) as f64);
+        }
 
         self.t_last_still_thinking = now_ms();
 
-        // Iterate placements recursively.
-        let base_parts = self.possible_solution_starts[start_index].parts.clone();
-        let mut accumulated = base_parts;
-        self.iter_placements(
-            &game_board_so_far,
-            &mut accumulated,
-            &unused_indices,
+        // Take disjoint borrows of self so the inner free function can recurse without
+        // re-borrowing self each call.
+        let pieces: &[PuzzlePiece] = &self.puzzle_pieces;
+        let figures_count = self.figures_count;
+        let target_figure = self.target_figure;
+        let t_start = self.t_start;
+        let status_cb = &self.status_cb;
+        let meta = &mut self.meta;
+        let solutions = &mut self.solutions;
+        let max_one_solution_hit = &mut self.max_one_solution_hit;
+        let t_last_still_thinking = &mut self.t_last_still_thinking;
+        let base_parts: Vec<PossibleSolutionPartOut> =
+            self.possible_solution_starts[start_index].parts.clone();
+
+        let mut state = IterState {
+            board: initial_board.data.clone(),
+            board_sum: initial_board_sum,
+            placement_stack: Vec::with_capacity(n),
+            iter_check_counter: 0,
+        };
+
+        iter_placements_inner(
+            &IterCtx {
+                pieces,
+                figures_count,
+                target_figure,
+                completed_sum,
+                avoid_corners,
+                unused: &unused_indices,
+                max_cells_per_left: &max_cells,
+                suffix_product: &suffix_product,
+                status_cb,
+                t_start,
+                base_parts: &base_parts,
+                initial_board: &initial_board,
+                start_index,
+                returning_max_one_solution: meta.returning_max_one_solution,
+            },
+            &mut IterMutState {
+                state: &mut state,
+                meta,
+                solutions,
+                max_one_solution_hit,
+                t_last_still_thinking,
+            },
             0,
-            start_index,
-            avoid_corners,
         );
-    }
-
-    fn iter_placements(
-        &mut self,
-        game_board: &Grid,
-        accumulated: &mut Vec<PossibleSolutionPartOut>,
-        unused: &[usize],
-        depth: usize,
-        start_index: usize,
-        avoid_corners: bool,
-    ) {
-        let current_piece_idx = unused[depth];
-        let next_count = unused.len() - depth - 1;
-
-        // Clone positions out so we can borrow self mutably below.
-        let positions: Vec<PositionOut> = self.puzzle_pieces[current_piece_idx]
-            .get_possible_positions(avoid_corners)
-            .to_vec();
-
-        let position_count = positions.len();
-        for i in 0..position_count {
-            if self.max_one_solution_hit {
-                return;
-            }
-
-            self.meta.total_number_of_iterator_placement_attempts += 1.0;
-
-            // Status update every ~5s.
-            let now = now_ms();
-            if now - self.t_last_still_thinking > 5000.0 {
-                self.t_last_still_thinking = now;
-                let time_passed = now - self.t_start;
-                let total_possible = self.meta.total_number_of_possible_combinations;
-                let attempts = self.meta.total_number_of_iterator_placement_attempts;
-                let skipped_imp = self.meta.skipped_impossible_situations;
-                let pct = if total_possible > 0.0 {
-                    skipped_imp / total_possible * 100.0
-                } else {
-                    0.0
-                };
-                let throughput = if time_passed > 0.0 {
-                    (skipped_imp / (time_passed / 1000.0)).round()
-                } else {
-                    0.0
-                };
-                let msg = format!(
-                    "Still thinking...\nNumber of puzzle piece placement attempts so far: {}\nNumber of skipped impossible situations: {}\nTotal possible combinations: {}\nPercentage of all possible combinations tried: {:.2}%\nTime passed: {}\nThroughput: {} situations per second",
-                    fmt_num(attempts),
-                    fmt_num(skipped_imp),
-                    fmt_num(total_possible),
-                    pct,
-                    fmt_duration(time_passed),
-                    fmt_num(throughput),
-                );
-                self.post_status(msg);
-            }
-
-            let pos = positions[i];
-            let placed_grid;
-            let placed_indices;
-            {
-                let piece = &self.puzzle_pieces[current_piece_idx];
-                placed_grid = piece.placed_grid(pos).clone();
-                placed_indices = piece.placed_indices(pos).to_vec();
-            }
-
-            let before = game_board.clone();
-            let after = self.stack_indices(game_board, &placed_indices);
-
-            // Heuristic skip.
-            let after_sum = after.sum();
-            let transforms_needed =
-                self.game_board_completed_sum as i64 - after_sum as i64;
-            let next_max = self.max_cells_influenced_per_left[next_count];
-            let can_be_solved_from_here = transforms_needed <= next_max as i64;
-
-            if !can_be_solved_from_here {
-                let mut skipped: f64 = 1.0;
-                for k in (depth + 1)..unused.len() {
-                    let p_idx = unused[k];
-                    skipped *=
-                        self.puzzle_pieces[p_idx].get_possible_positions(avoid_corners).len()
-                            as f64;
-                }
-                self.meta.skipped_impossible_situations += skipped;
-                continue;
-            }
-
-            let piece_id = self.puzzle_pieces[current_piece_idx].id.clone();
-            accumulated.push(PossibleSolutionPartOut {
-                id: piece_id,
-                position: pos,
-                grid: placed_grid.to_output(None),
-                before: Some(before.to_output(None)),
-                after: Some(after.to_output(None)),
-                part_of_possible_solution_start: None,
-            });
-
-            if next_count > 0 {
-                self.iter_placements(
-                    &after,
-                    accumulated,
-                    unused,
-                    depth + 1,
-                    start_index,
-                    avoid_corners,
-                );
-            } else {
-                // Leaf: check solution.
-                self.meta.total_number_of_tried_combinations += 1.0;
-                let is_sol = after.every_is(self.target_figure);
-                if is_sol {
-                    // Mark last part's `after.isSolution = true`.
-                    if let Some(last) = accumulated.last_mut() {
-                        if let Some(a) = last.after.as_mut() {
-                            a.is_solution = Some(true);
-                        }
-                    }
-                    let sol = PossibleSolutionOut {
-                        target_value: self.target_figure,
-                        parts: accumulated.clone(),
-                        solution_start_index: Some(start_index),
-                        continuation_info: None,
-                    };
-                    self.solutions.push(sol);
-                    self.post_status("Found solution!".to_string());
-
-                    if self.meta.returning_max_one_solution {
-                        self.max_one_solution_hit = true;
-                        accumulated.pop();
-                        return;
-                    }
-                }
-            }
-
-            accumulated.pop();
-        }
     }
 
     fn finalize(&mut self) {
@@ -1239,6 +1139,271 @@ impl Puzzle {
             meta: self.meta,
         }
     }
+}
+
+// ============================================================================
+// Brute-force inner loop
+// ============================================================================
+
+#[derive(Clone, Copy)]
+struct Placement {
+    piece_idx: usize,
+    /// Index into `pieces[piece_idx].possible_positions` / `indices_by_position` /
+    /// `grid_by_position`.
+    pos_array_idx: usize,
+}
+
+/// Immutable context for the recursion.
+struct IterCtx<'a> {
+    pieces: &'a [PuzzlePiece],
+    figures_count: u8,
+    target_figure: u8,
+    completed_sum: usize,
+    avoid_corners: bool,
+    unused: &'a [usize],
+    max_cells_per_left: &'a [usize],
+    suffix_product: &'a [f64],
+    status_cb: &'a Function,
+    t_start: f64,
+    base_parts: &'a [PossibleSolutionPartOut],
+    initial_board: &'a Grid,
+    start_index: usize,
+    returning_max_one_solution: bool,
+}
+
+/// Per-call state held by value across recursion.
+struct IterState {
+    /// Working game board (mutated in place + reverted on backtrack).
+    board: Vec<u8>,
+    /// Running sum of `board`. Maintained incrementally on apply/revert so we never
+    /// have to scan the board to compute it, and so the solution check becomes
+    /// `board_sum == completed_sum` (since values are bounded by `target_figure`).
+    board_sum: usize,
+    placement_stack: Vec<Placement>,
+    iter_check_counter: u32,
+}
+
+/// Mutable references that need to outlive the recursion. Held separately from
+/// `IterCtx` so the borrow checker is happy with the disjoint-field borrows.
+struct IterMutState<'a> {
+    state: &'a mut IterState,
+    meta: &'a mut MetaOut,
+    solutions: &'a mut Vec<PossibleSolutionOut>,
+    max_one_solution_hit: &'a mut bool,
+    t_last_still_thinking: &'a mut f64,
+}
+
+fn iter_placements_inner(ctx: &IterCtx, m: &mut IterMutState, depth: usize) {
+    if *m.max_one_solution_hit {
+        return;
+    }
+
+    let piece_idx = ctx.unused[depth];
+    let piece = &ctx.pieces[piece_idx];
+    let next_count = ctx.unused.len() - depth - 1;
+    let max_cells_at_left = ctx.max_cells_per_left[next_count];
+    let skip_product = ctx.suffix_product[depth + 1];
+    let figures_count = ctx.figures_count;
+    let completed_sum = ctx.completed_sum;
+    let avoid_corners = ctx.avoid_corners;
+
+    // Pre-resolve the slice of position indices to iterate. With both the "all" and the
+    // "corner-safe" sets stored as `Vec<usize>`, the inner loop body doesn't need to
+    // branch on `avoid_corners` per iteration. An indexed loop with `get_unchecked`
+    // benchmarked identically to the slice iterator, so we use the cleaner iterator.
+    let position_indices = piece.position_indices(avoid_corners);
+
+    for &pos_arr_idx in position_indices {
+        if *m.max_one_solution_hit {
+            return;
+        }
+
+        m.meta.total_number_of_iterator_placement_attempts += 1.0;
+        m.state.iter_check_counter += 1;
+
+        // Throttle the JS `Date.now()` call — the wasm→JS call alone is more
+        // expensive than dozens of iterations of the actual brute force.
+        if m.state.iter_check_counter >= 65_536 {
+            m.state.iter_check_counter = 0;
+            let now = now_ms();
+            if now - *m.t_last_still_thinking > 5000.0 {
+                *m.t_last_still_thinking = now;
+                let time_passed = now - ctx.t_start;
+                let total_possible = m.meta.total_number_of_possible_combinations;
+                let attempts = m.meta.total_number_of_iterator_placement_attempts;
+                let skipped_imp = m.meta.skipped_impossible_situations;
+                let pct = if total_possible > 0.0 {
+                    skipped_imp / total_possible * 100.0
+                } else {
+                    0.0
+                };
+                let throughput = if time_passed > 0.0 {
+                    (skipped_imp / (time_passed / 1000.0)).round()
+                } else {
+                    0.0
+                };
+                let msg = format!(
+                    "Still thinking...\nNumber of puzzle piece placement attempts so far: {}\nNumber of skipped impossible situations: {}\nTotal possible combinations: {}\nPercentage of all possible combinations tried: {:.2}%\nTime passed: {}\nThroughput: {} situations per second",
+                    fmt_num(attempts),
+                    fmt_num(skipped_imp),
+                    fmt_num(total_possible),
+                    pct,
+                    fmt_duration(time_passed),
+                    fmt_num(throughput),
+                );
+                let _ = ctx.status_cb.call1(&JsValue::NULL, &JsValue::from_str(&msg));
+            }
+        }
+
+        // Apply the piece (bump each touched cell by +1 mod figures_count) and update the
+        // running sum. Going through a separate `#[inline(always)]` helper turned out to
+        // produce tighter wasm than inlining the loop body manually (LLVM seems to
+        // optimize the smaller function context better; benchmarked +14% when manually
+        // inlined).
+        let indices: &[usize] =
+            unsafe { piece.indices_by_position.get_unchecked(pos_arr_idx) };
+        let delta = apply_piece(&mut m.state.board, indices, figures_count);
+        m.state.board_sum = (m.state.board_sum as i64 + delta) as usize;
+
+        // Influence-bound early exit.
+        let transforms_needed = completed_sum as i64 - m.state.board_sum as i64;
+        if transforms_needed > max_cells_at_left as i64 {
+            revert_piece(&mut m.state.board, indices, figures_count);
+            m.state.board_sum = (m.state.board_sum as i64 - delta) as usize;
+            m.meta.skipped_impossible_situations += skip_product;
+            continue;
+        }
+
+        m.state.placement_stack.push(Placement {
+            piece_idx,
+            pos_array_idx: pos_arr_idx,
+        });
+
+        if next_count > 0 {
+            iter_placements_inner(ctx, m, depth + 1);
+        } else {
+            // Leaf — check for solution. Sum equality is sufficient (see brute_force_one_start comment).
+            m.meta.total_number_of_tried_combinations += 1.0;
+            if m.state.board_sum == completed_sum {
+                let parts = materialize_solution_parts(
+                    ctx.pieces,
+                    figures_count,
+                    ctx.initial_board,
+                    ctx.base_parts,
+                    &m.state.placement_stack,
+                );
+                m.solutions.push(PossibleSolutionOut {
+                    target_value: ctx.target_figure,
+                    parts,
+                    solution_start_index: Some(ctx.start_index),
+                    continuation_info: None,
+                });
+                let _ = ctx
+                    .status_cb
+                    .call1(&JsValue::NULL, &JsValue::from_str("Found solution!"));
+                if ctx.returning_max_one_solution {
+                    *m.max_one_solution_hit = true;
+                }
+            }
+        }
+
+        revert_piece(&mut m.state.board, indices, figures_count);
+        m.state.board_sum = (m.state.board_sum as i64 - delta) as usize;
+        m.state.placement_stack.pop();
+    }
+}
+
+// Note: benchmarked ~25% slowdown on level34 (5.3M attempts) when these used checked
+// indexing. The bounds checks on a tight `u8` loop are clearly not free on wasm.
+// Safety: every `idx` was constructed in `PuzzlePiece::new` from board coordinates that
+// were bounded by `game_board.rows`/`cols`, so the index is always within the board.
+#[inline(always)]
+fn apply_piece(board: &mut [u8], indices: &[usize], figures_count: u8) -> i64 {
+    let mut delta: i64 = 0;
+    for &idx in indices {
+        let old = unsafe { *board.get_unchecked(idx) };
+        let new = if old + 1 == figures_count { 0 } else { old + 1 };
+        delta += new as i64 - old as i64;
+        unsafe {
+            *board.get_unchecked_mut(idx) = new;
+        }
+    }
+    delta
+}
+
+#[inline(always)]
+fn revert_piece(board: &mut [u8], indices: &[usize], figures_count: u8) {
+    for &idx in indices {
+        let v = unsafe { *board.get_unchecked(idx) };
+        let nv = if v == 0 { figures_count - 1 } else { v - 1 };
+        unsafe {
+            *board.get_unchecked_mut(idx) = nv;
+        }
+    }
+}
+
+/// Reconstruct full `parts` for an emitted solution: prefix from the possible-solution-start
+/// followed by replayed snapshots for the brute-force-chosen placements. Walking the
+/// placements once at success time is much cheaper than cloning before/grid/after snapshots
+/// on every recursion step.
+fn materialize_solution_parts(
+    pieces: &[PuzzlePiece],
+    figures_count: u8,
+    initial_board: &Grid,
+    base_parts: &[PossibleSolutionPartOut],
+    placements: &[Placement],
+) -> Vec<PossibleSolutionPartOut> {
+    let mut parts = Vec::with_capacity(base_parts.len() + placements.len());
+    parts.extend_from_slice(base_parts);
+
+    let mut prev: Vec<u8> = initial_board.data.clone();
+    let rows = initial_board.rows;
+    let cols = initial_board.cols;
+    let cells = rows * cols;
+
+    for placement in placements {
+        let piece = &pieces[placement.piece_idx];
+        let pos = piece.possible_positions[placement.pos_array_idx];
+        let placed_grid = &piece.grid_by_position[placement.pos_array_idx];
+
+        let before_data = prev.clone();
+        let mut after_data = prev.clone();
+        for &idx in &piece.indices_by_position[placement.pos_array_idx] {
+            let v = after_data[idx];
+            after_data[idx] = if v + 1 == figures_count { 0 } else { v + 1 };
+        }
+
+        let before_grid = Grid {
+            data: before_data,
+            rows,
+            cols,
+        };
+        let after_grid = Grid {
+            data: after_data.clone(),
+            rows,
+            cols,
+        };
+        let _ = cells;
+
+        parts.push(PossibleSolutionPartOut {
+            id: piece.id.clone(),
+            position: pos,
+            grid: placed_grid.to_output(None),
+            before: Some(before_grid.to_output(None)),
+            after: Some(after_grid.to_output(None)),
+            part_of_possible_solution_start: None,
+        });
+
+        prev = after_data;
+    }
+
+    if let Some(last) = parts.last_mut() {
+        if let Some(after) = last.after.as_mut() {
+            after.is_solution = Some(true);
+        }
+    }
+
+    parts
 }
 
 fn combos_compatible(

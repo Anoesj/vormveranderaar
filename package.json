@@ -7,7 +7,7 @@
     "dev": "nuxt dev",
     "build": "./scripts/build.sh",
     "build:netlify": "./scripts/build-netlify.sh",
-    "build:wasm": "wasm-pack build wasm/solver --target web --release --out-dir pkg && rm -f wasm/solver/pkg/.gitignore",
+    "build:wasm": "wasm-pack build wasm/solver --target web --release --out-dir pkg && rm -f wasm/solver/pkg/.gitignore wasm/solver/pkg/README.md",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "test": "vitest",
