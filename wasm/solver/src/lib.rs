@@ -288,6 +288,15 @@ struct PuzzlePiece {
     all_position_indices: Vec<usize>,
     /// Indices into `possible_positions` that don't touch any game-board corner.
     corner_safe_position_indices: Vec<usize>,
+    /// For each entry in `possible_positions`, a u64 bitmask of which game-board cells
+    /// the piece's 1-cells land on (bit `idx` set iff cell `idx` is touched). Used by
+    /// the packed bit-plane brute-force path; populated only when `game_board.cells()
+    /// <= 64`, empty otherwise (larger boards fall back to the u8 path).
+    mask_by_position: Vec<u64>,
+    /// `popcount(mask)` cached alongside each mask. The packed apply computes the
+    /// running-sum delta as `mask_popcount - fc * count_of_cells_at_value_(fc-1)`,
+    /// so we want popcount precomputed rather than re-evaluating per apply.
+    mask_popcount_by_position: Vec<u32>,
 }
 
 impl PuzzlePiece {
@@ -334,6 +343,12 @@ impl PuzzlePiece {
         let mut possible_positions = Vec::new();
         let mut indices_by_position: Vec<Vec<usize>> = Vec::new();
         let mut grid_by_position: Vec<Grid> = Vec::new();
+        // Packed-path masks alongside indices. Only built when the game board fits
+        // into a single u64 (≤ 64 cells); larger boards leave these empty and the
+        // brute force falls back to the u8 path.
+        let cells_fit_in_u64 = game_board.cells() <= 64;
+        let mut mask_by_position: Vec<u64> = Vec::new();
+        let mut mask_popcount_by_position: Vec<u32> = Vec::new();
 
         if game_board.rows >= grid.rows && game_board.cols >= grid.cols {
             for y in 0..=(game_board.rows - grid.rows) {
@@ -342,6 +357,7 @@ impl PuzzlePiece {
 
                     let mut indices = Vec::new();
                     let mut placed = Grid::empty_like(game_board);
+                    let mut mask: u64 = 0;
                     for ry in 0..grid.rows {
                         for rx in 0..grid.cols {
                             let v = grid.at(rx, ry);
@@ -351,11 +367,18 @@ impl PuzzlePiece {
                                 let idx = gy * game_board.cols + gx;
                                 indices.push(idx);
                                 placed.data[idx] = v;
+                                if cells_fit_in_u64 {
+                                    mask |= 1u64 << idx;
+                                }
                             }
                         }
                     }
                     indices_by_position.push(indices);
                     grid_by_position.push(placed);
+                    if cells_fit_in_u64 {
+                        mask_popcount_by_position.push(mask.count_ones());
+                        mask_by_position.push(mask);
+                    }
                 }
             }
         }
@@ -387,6 +410,8 @@ impl PuzzlePiece {
             can_avoid_affecting_some_corners,
             possible_positions,
             indices_by_position,
+            mask_by_position,
+            mask_popcount_by_position,
             grid_by_position,
             all_position_indices,
             corner_safe_position_indices,
@@ -952,18 +977,42 @@ impl Puzzle {
             });
         }
 
+        // Pick the board engine once for the whole run. The packed bit-plane path
+        // is only viable when the game board fits in a u64 AND every piece has
+        // its `mask_by_position` populated (built in `PuzzlePiece::new` under the
+        // same ≤ 64 cells condition).
+        let use_packed = self.game_board.cells() <= 64
+            && self
+                .puzzle_pieces
+                .iter()
+                .all(|p| !p.mask_by_position.is_empty() || p.possible_positions.is_empty());
+
+        if use_packed {
+            match bits_per_cell_for(self.figures_count) {
+                Some(1) => self.brute_force_with_engine::<PackedEngine<1>>(),
+                Some(2) => self.brute_force_with_engine::<PackedEngine<2>>(),
+                Some(3) => self.brute_force_with_engine::<PackedEngine<3>>(),
+                Some(4) => self.brute_force_with_engine::<PackedEngine<4>>(),
+                _ => self.brute_force_with_engine::<U8Engine>(),
+            }
+        } else {
+            self.brute_force_with_engine::<U8Engine>();
+        }
+    }
+
+    fn brute_force_with_engine<B: BoardEngine>(&mut self) {
         let count = self.possible_solution_starts.len();
         for i in 0..count {
             if self.max_one_solution_hit {
                 break;
             }
-            self.brute_force_one_start(i);
+            self.brute_force_one_start::<B>(i);
         }
 
         self.finalize();
     }
 
-    fn brute_force_one_start(&mut self, start_index: usize) {
+    fn brute_force_one_start<B: BoardEngine>(&mut self, start_index: usize) {
         let avoid_corners = self.has_prepared_solution_starts;
 
         // Compute unused puzzle piece indices (sorted by cellsInfluenced desc).
@@ -1084,14 +1133,14 @@ impl Puzzle {
         let base_parts: Vec<PossibleSolutionPartOut> =
             self.possible_solution_starts[start_index].parts.clone();
 
-        let mut state = IterState {
-            board: initial_board.data.clone(),
+        let mut state = IterState::<B> {
+            engine: B::from_grid(&initial_board, figures_count),
             board_sum: initial_board_sum,
             placement_stack: Vec::with_capacity(n),
             iter_check_counter: 0,
         };
 
-        iter_placements_inner(
+        iter_placements_inner::<B>(
             &IterCtx {
                 pieces,
                 figures_count,
@@ -1256,13 +1305,15 @@ struct SliceCtx<'a> {
     stop_cb: Option<&'a Function>,
 }
 
-/// Per-call state held by value across recursion.
-struct IterState {
-    /// Working game board (mutated in place + reverted on backtrack).
-    board: Vec<u8>,
-    /// Running sum of `board`. Maintained incrementally on apply/revert so we never
-    /// have to scan the board to compute it, and so the solution check becomes
-    /// `board_sum == completed_sum` (since values are bounded by `target_figure`).
+/// Per-call state held by value across recursion. Generic over the board
+/// representation (u8 array or bit-plane packed) so the recursion compiles
+/// once per engine type and inlines the right apply/revert path.
+struct IterState<B: BoardEngine> {
+    engine: B,
+    /// Running sum across the working board. Maintained incrementally on
+    /// apply/revert (delta returned by `engine.apply`) so we never have to
+    /// scan the board, and the solution check is `board_sum == completed_sum`
+    /// (cell values are bounded by `target_figure`).
     board_sum: usize,
     placement_stack: Vec<Placement>,
     iter_check_counter: u32,
@@ -1270,15 +1321,20 @@ struct IterState {
 
 /// Mutable references that need to outlive the recursion. Held separately from
 /// `IterCtx` so the borrow checker is happy with the disjoint-field borrows.
-struct IterMutState<'a> {
-    state: &'a mut IterState,
+struct IterMutState<'a, B: BoardEngine> {
+    state: &'a mut IterState<B>,
     meta: &'a mut MetaOut,
     solutions: &'a mut Vec<PossibleSolutionOut>,
     max_one_solution_hit: &'a mut bool,
     t_last_still_thinking: &'a mut f64,
 }
 
-fn iter_placements_inner(ctx: &IterCtx, m: &mut IterMutState, depth: usize, parent_i_pos: usize) {
+fn iter_placements_inner<B: BoardEngine>(
+    ctx: &IterCtx,
+    m: &mut IterMutState<'_, B>,
+    depth: usize,
+    parent_i_pos: usize,
+) {
     if *m.max_one_solution_hit {
         return;
     }
@@ -1389,19 +1445,16 @@ fn iter_placements_inner(ctx: &IterCtx, m: &mut IterMutState, depth: usize, pare
         }
 
         // Apply the piece (bump each touched cell by +1 mod figures_count) and update the
-        // running sum. Going through a separate `#[inline(always)]` helper turned out to
-        // produce tighter wasm than inlining the loop body manually (LLVM seems to
-        // optimize the smaller function context better; benchmarked +14% when manually
-        // inlined).
-        let indices: &[usize] =
-            unsafe { piece.indices_by_position.get_unchecked(pos_arr_idx) };
-        let delta = apply_piece(&mut m.state.board, indices, figures_count);
+        // running sum. The engine handles the actual mutation — see `BoardEngine` impls
+        // for the u8 vs packed bit-plane paths. Going through the inline trait method
+        // is monomorphized away at compile time.
+        let delta = m.state.engine.apply(piece, pos_arr_idx, figures_count);
         m.state.board_sum = (m.state.board_sum as i64 + delta) as usize;
 
         // Influence-bound early exit.
         let transforms_needed = completed_sum as i64 - m.state.board_sum as i64;
         if transforms_needed > max_cells_at_left as i64 {
-            revert_piece(&mut m.state.board, indices, figures_count);
+            m.state.engine.revert(piece, pos_arr_idx, figures_count);
             m.state.board_sum = (m.state.board_sum as i64 - delta) as usize;
             if should_count {
                 m.meta.skipped_impossible_situations += skip_product;
@@ -1444,7 +1497,7 @@ fn iter_placements_inner(ctx: &IterCtx, m: &mut IterMutState, depth: usize, pare
             }
         }
 
-        revert_piece(&mut m.state.board, indices, figures_count);
+        m.state.engine.revert(piece, pos_arr_idx, figures_count);
         m.state.board_sum = (m.state.board_sum as i64 - delta) as usize;
         m.state.placement_stack.pop();
     }
@@ -1476,6 +1529,155 @@ fn revert_piece(board: &mut [u8], indices: &[usize], figures_count: u8) {
         unsafe {
             *board.get_unchecked_mut(idx) = nv;
         }
+    }
+}
+
+// ============================================================================
+// BoardEngine: abstraction over the working board so the brute-force recursion
+// can run unchanged on either a flat u8 board or a bit-plane packed board.
+// ============================================================================
+//
+// The bit-plane representation packs an N-cell board (N ≤ 64) into `BITS`
+// u64 "planes", one per bit position of a cell's value. So for fc=2 we use one
+// plane (1 bit/cell); for fc∈{3,4} two planes; for fc∈{5..=8} three planes;
+// for fc∈{9..=16} four planes. Per `apply`:
+//
+//   1. Count cells in `mask` currently at value `fc-1` (the ones that will
+//      roll over to 0). With each plane being a u64 we get that count as
+//      `popcount(match_value & mask)` where `match_value` is built by ANDing
+//      together either `plane[k]` or `!plane[k]` per bit `k` of `fc-1`. That
+//      single `c` lets us compute the sum delta in one shot:
+//          delta = popcount(mask) − fc · c
+//      because cells with old value < fc-1 contribute +1 and cells at fc-1
+//      contribute -(fc-1) overall: (touched − c) · 1 + c · −(fc-1).
+//   2. Ripple-add 1 to each `mask` cell with cell-parallel bitwise carry:
+//      for plane k, `new_plane = plane ^ carry`, `next_carry = plane & carry`.
+//   3. If `fc < 2^BITS` (e.g. fc=3 in a 2-plane board), the natural mod 2^BITS
+//      doesn't suffice: cells that landed on the value `fc` must be reset to 0.
+//      Detect them with the same ANDed-plane trick on the bit pattern of `fc`,
+//      then `plane[k] &= !match_fc` per plane.
+//
+// Revert is a snapshot stack: every `apply` pushes the pre-state planes onto a
+// per-engine stack, every `revert` pops back. That's O(BITS) per call vs a
+// piece-position-dependent loop, and the snapshot itself is a `Copy` of
+// `[u64; BITS]` (at most 32 bytes) so the stack stays cache-hot.
+trait BoardEngine: Sized {
+    fn from_grid(grid: &Grid, figures_count: u8) -> Self;
+    /// Apply piece's increment at this position. Returns delta to the running sum.
+    fn apply(&mut self, piece: &PuzzlePiece, pos_array_idx: usize, fc: u8) -> i64;
+    /// Undo the most recent `apply` (matched 1-to-1 with `apply` calls).
+    fn revert(&mut self, piece: &PuzzlePiece, pos_array_idx: usize, fc: u8);
+}
+
+struct U8Engine {
+    board: Vec<u8>,
+}
+
+impl BoardEngine for U8Engine {
+    #[inline(always)]
+    fn from_grid(grid: &Grid, _fc: u8) -> Self {
+        Self { board: grid.data.clone() }
+    }
+
+    #[inline(always)]
+    fn apply(&mut self, piece: &PuzzlePiece, pos_array_idx: usize, fc: u8) -> i64 {
+        let indices = unsafe { piece.indices_by_position.get_unchecked(pos_array_idx) };
+        apply_piece(&mut self.board, indices, fc)
+    }
+
+    #[inline(always)]
+    fn revert(&mut self, piece: &PuzzlePiece, pos_array_idx: usize, fc: u8) {
+        let indices = unsafe { piece.indices_by_position.get_unchecked(pos_array_idx) };
+        revert_piece(&mut self.board, indices, fc);
+    }
+}
+
+struct PackedEngine<const BITS: usize> {
+    planes: [u64; BITS],
+    /// Snapshot stack for backtracking. Each entry is the full plane state from
+    /// before an `apply`; `revert` pops and restores. Capacity preallocated to
+    /// `unused.len()` in `brute_force_one_start` so this never reallocates.
+    snapshots: Vec<[u64; BITS]>,
+}
+
+impl<const BITS: usize> BoardEngine for PackedEngine<BITS> {
+    fn from_grid(grid: &Grid, _fc: u8) -> Self {
+        let mut planes = [0u64; BITS];
+        debug_assert!(grid.data.len() <= 64);
+        for (i, &v) in grid.data.iter().enumerate() {
+            for k in 0..BITS {
+                if (v >> k) & 1 == 1 {
+                    planes[k] |= 1u64 << i;
+                }
+            }
+        }
+        Self { planes, snapshots: Vec::new() }
+    }
+
+    #[inline(always)]
+    fn apply(&mut self, piece: &PuzzlePiece, pos_array_idx: usize, fc: u8) -> i64 {
+        // snapshot()
+        self.snapshots.push(self.planes);
+
+        let mask = unsafe { *piece.mask_by_position.get_unchecked(pos_array_idx) };
+        let mask_popcount = unsafe { *piece.mask_popcount_by_position.get_unchecked(pos_array_idx) };
+
+        // c = how many of the touched cells currently hold value fc-1
+        let v = fc - 1;
+        let mut match_v: u64 = !0u64;
+        for k in 0..BITS {
+            if (v >> k) & 1 == 1 {
+                match_v &= self.planes[k];
+            } else {
+                match_v &= !self.planes[k];
+            }
+        }
+        let c = (match_v & mask).count_ones() as i64;
+
+        // Ripple-add 1 to every cell in `mask`.
+        let mut carry = mask;
+        for k in 0..BITS {
+            let new_carry = self.planes[k] & carry;
+            self.planes[k] ^= carry;
+            carry = new_carry;
+        }
+        // If fc == 2^BITS exactly, the final `carry` (out of the top plane) is the
+        // legitimate mod-2^BITS wraparound and is simply discarded.
+
+        // For non-power-of-2 fc, reset cells whose new value landed on fc.
+        if (fc as usize) < (1usize << BITS) {
+            let mut match_fc: u64 = !0u64;
+            for k in 0..BITS {
+                if (fc >> k) & 1 == 1 {
+                    match_fc &= self.planes[k];
+                } else {
+                    match_fc &= !self.planes[k];
+                }
+            }
+            for k in 0..BITS {
+                self.planes[k] &= !match_fc;
+            }
+        }
+
+        mask_popcount as i64 - (fc as i64) * c
+    }
+
+    #[inline(always)]
+    fn revert(&mut self, _piece: &PuzzlePiece, _pos_array_idx: usize, _fc: u8) {
+        // The snapshot stack is matched 1:1 with `apply`s in the recursion, so a
+        // missing pop here would be a bug rather than a recoverable state. Using
+        // `unwrap_or_default` would silently mask it.
+        self.planes = self.snapshots.pop().expect("PackedEngine revert without matching apply");
+    }
+}
+
+fn bits_per_cell_for(fc: u8) -> Option<usize> {
+    match fc {
+        2 => Some(1),
+        3..=4 => Some(2),
+        5..=8 => Some(3),
+        9..=16 => Some(4),
+        _ => None,
     }
 }
 
