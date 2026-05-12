@@ -38,6 +38,13 @@ const numberFormatter = new Intl.NumberFormat('nl-NL', {
   maximumFractionDigits: 2,
 });
 
+// Throughput-as-a-percentage of total combinations per second is usually a very
+// small number (e.g. 1e-8 %/s on big puzzles), so we format by significant digits
+// rather than fixed decimals — otherwise it would always render as 0.
+const smallPercentageFormatter = new Intl.NumberFormat('nl-NL', {
+  maximumSignificantDigits: 4,
+});
+
 export class Puzzle {
   figures: Figure[];
   figuresCount: number;
@@ -602,6 +609,10 @@ export class Puzzle {
         this.#timings.tLastStillThinkingLog = now;
 
         const timePassed = now - this.#timings.tStart;
+        const throughput = this.meta.skippedImpossibleSituations / (timePassed / 1000);
+        const throughputPercentage = this.meta.totalNumberOfPossibleCombinations > 0
+          ? (throughput / this.meta.totalNumberOfPossibleCombinations) * 100
+          : 0;
 
         /* eslint-disable @stylistic/max-len */
         const msg = (
@@ -611,7 +622,8 @@ export class Puzzle {
           + `\nTotal possible combinations: ${numberFormatter.format(this.meta.totalNumberOfPossibleCombinations)}`
           + `\nPercentage of all possible combinations tried: ${numberFormatter.format(this.meta.skippedImpossibleSituations / this.meta.totalNumberOfPossibleCombinations * 100)}%`
           + `\nTime passed: ${this.#milliSecondsToString(timePassed)}`
-          + `\nThroughput: ${numberFormatter.format(Math.round(this.meta.skippedImpossibleSituations / (timePassed / 1000)))} situations per second`
+          + `\nThroughput: ${numberFormatter.format(Math.round(throughput))} situations per second`
+          + `\nThroughput percentage: ${smallPercentageFormatter.format(throughputPercentage)}% per second`
         );
         /* eslint-enable @stylistic/max-len */
 

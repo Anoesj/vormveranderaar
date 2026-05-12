@@ -1310,18 +1310,24 @@ fn iter_placements_inner(ctx: &IterCtx, m: &mut IterMutState, depth: usize, pare
                     0.0
                 };
                 let throughput = if time_passed > 0.0 {
-                    (skipped_imp / (time_passed / 1000.0)).round()
+                    skipped_imp / (time_passed / 1000.0)
+                } else {
+                    0.0
+                };
+                let throughput_pct = if total_possible > 0.0 {
+                    throughput / total_possible * 100.0
                 } else {
                     0.0
                 };
                 let msg = format!(
-                    "Still thinking...\nNumber of puzzle piece placement attempts so far: {}\nNumber of skipped impossible situations: {}\nTotal possible combinations: {}\nPercentage of all possible combinations tried: {:.2}%\nTime passed: {}\nThroughput: {} situations per second",
+                    "Still thinking...\nNumber of puzzle piece placement attempts so far: {}\nNumber of skipped impossible situations: {}\nTotal possible combinations: {}\nPercentage of all possible combinations tried: {:.2}%\nTime passed: {}\nThroughput: {} situations per second\nThroughput percentage: {}% per second",
                     fmt_num(attempts),
                     fmt_num(skipped_imp),
                     fmt_num(total_possible),
                     pct,
                     fmt_duration(time_passed),
-                    fmt_num(throughput),
+                    fmt_num(throughput.round()),
+                    fmt_small_percentage(throughput_pct),
                 );
                 let _ = ctx.status_cb.call1(&JsValue::NULL, &JsValue::from_str(&msg));
             }
@@ -1533,6 +1539,22 @@ fn fmt_num(n: f64) -> String {
         grouped.push(*b as char);
     }
     format!("{}{}", sign, grouped)
+}
+
+// Throughput-as-a-percentage of total combinations per second is usually a tiny
+// number (e.g. 1e-8 %/s on big puzzles), so format by significant digits instead
+// of fixed decimals — `{:.2}` would always render 0.
+fn fmt_small_percentage(n: f64) -> String {
+    if !n.is_finite() || n == 0.0 {
+        return "0".to_string();
+    }
+    let abs = n.abs();
+    if abs >= 0.01 {
+        format!("{:.4}", n)
+    } else {
+        // 4 significant digits, scientific notation for very small values.
+        format!("{:.3e}", n)
+    }
 }
 
 fn fmt_duration(ms: f64) -> String {
