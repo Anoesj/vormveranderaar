@@ -232,7 +232,7 @@
               <h2>Info</h2>
               <!-- eslint-disable-next-line vue/max-len -->
               <p>{{ result.solutions.length > 0 ? '✅' : '❌' }} <strong>{{ result.solutions.length > 0 ? `${result.solutions.length} solution${result.solutions.length > 1 ? 's' : ''} found` : 'no solution found' }}</strong></p>
-              <p>ℹ️ <strong>{{ result.meta.returningMaxOneSolution ? 'Maximum of one solution returned for better performance' : 'Looked for all possible solutions' }}</strong></p>
+              <p>ℹ️ <strong>{{ maxOneSolutionMessage }}</strong></p>
               <p>⏱️ <strong>{{ formatDuration(result.meta.calculationDuration) }}</strong> to calculate the situation</p>
               <p v-if="calculateInBrowser">🧠 <em>Max memory cannot be measured when calculating in-browser</em></p>
               <p v-else>🧠 <strong>{{ formatMemory(result.meta.maxMemoryUsed) }}</strong> max memory used</p>
@@ -339,7 +339,7 @@
             <template #summary>
               <h2 class="flex items-center gap-2">
                 <BadgeCheck class="grow-0 shrink-0"/>
-                Phase 2: solutions ({{ numberFormatter.format(result.solutions.length) }}{{ result.meta.returningMaxOneSolution ? ' — maximized at one' : '' }})
+                Phase 2: solutions ({{ numberFormatter.format(result.solutions.length) }}{{ phase2EarlyStopSuffix }})
               </h2>
             </template>
 
@@ -418,6 +418,32 @@
     return recommendedWorkerCount();
   });
   const canMultiThread = computed(() => recommendedWorkerCount() > 1);
+
+  // `returningMaxOneSolution` only means "each worker bails after its first
+  // solution", so with N parallel workers each one can find a different
+  // solution before the shared stop flag reaches them — you can see up to N
+  // solutions even in early-stop mode. The original text claimed the count
+  // was guaranteed to be one; rewrite it to match what actually happened.
+  const maxOneSolutionMessage = computed(() => {
+    const r = result.value;
+    if (!r) {
+      return '';
+    }
+    if (!r.meta.returningMaxOneSolution) {
+      return 'Looked for all possible solutions';
+    }
+    if (r.solutions.length <= 1) {
+      return 'Stopped after finding one solution (for better performance)';
+    }
+    return `Stopped after the first solution per worker — ${r.solutions.length} solutions found across parallel workers`;
+  });
+  const phase2EarlyStopSuffix = computed(() => {
+    const r = result.value;
+    if (!r?.meta.returningMaxOneSolution) {
+      return '';
+    }
+    return r.solutions.length <= 1 ? ' — early stop after first' : ' — across parallel workers';
+  });
   // `navigator` isn't part of the Vue template scope (and would be `undefined`
   // during Nitro's SPA-shell prerender pass anyway), so expose the core count
   // through a computed instead of referencing the global directly.
