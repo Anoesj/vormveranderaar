@@ -27,6 +27,18 @@ export default defineNuxtConfig({
     experimental: {
       websocket: true,
     },
+    // Mirror the COOP/COEP headers `app/public/_headers` sets for Netlify so
+    // `nuxt dev` and the bun preset are cross-origin-isolated too — without these,
+    // `SharedArrayBuffer` isn't available and the multi-threaded solver falls back
+    // to the single-worker path.
+    routeRules: {
+      '/**': {
+        headers: {
+          'Cross-Origin-Opener-Policy': 'same-origin',
+          'Cross-Origin-Embedder-Policy': 'credentialless',
+        },
+      },
+    },
   },
   runtimeConfig: {
     public: {

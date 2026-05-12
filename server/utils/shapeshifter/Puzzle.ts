@@ -66,7 +66,7 @@ export class Puzzle {
    */
   #maxCellsInfluencedPerPuzzlePiecesLeft: Map<number, number> = new Map();
 
-  /* eslint-disable @stylistic/indent */
+
   meta: {
     totalNumberOfPossibleCombinations: number;
     totalNumberOfTriedCombinations: number;
@@ -110,7 +110,7 @@ export class Puzzle {
     tEnd: null,
     tLastStillThinkingLog: null,
   };
-  /* eslint-enable @stylistic/indent */
+
 
   #perf = {
     toEmptyGameBoardWithPuzzlePieceAt: new PerfStat(),

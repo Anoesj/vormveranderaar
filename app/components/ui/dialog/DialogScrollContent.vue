@@ -38,7 +38,7 @@
           )
         "
         v-bind="forwarded"
-        @pointer-down-outside="(event) => {
+        @pointerDownOutside="(event) => {
           const originalEvent = event.detail.originalEvent;
           const target = originalEvent.target as HTMLElement;
           if (originalEvent.offsetX > target.clientWidth || originalEvent.offsetY > target.clientHeight) {

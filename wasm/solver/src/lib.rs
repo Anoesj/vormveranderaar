@@ -1248,19 +1248,20 @@ fn iter_placements_inner(ctx: &IterCtx, m: &mut IterMutState, depth: usize, pare
     // one unused piece), skip iterations whose `task_idx % num_workers != worker_index`.
     // The task index is built deterministically so every worker enumerates the same
     // tree, just keeps its own slice.
-    let (slice_at_this_depth, num_workers, worker_index, task_stride) = match ctx.slice {
+    //
+    // `should_count` controls whether this iteration contributes to the meta counters.
+    // Above the split depth every worker walks the same nodes (duplicated work), so to
+    // make the *summed* counters across workers match the single-thread totals we only
+    // let worker 0 count there. At and below the split depth each worker processes a
+    // unique slice and all of them count their share.
+    let (slice_at_this_depth, num_workers, worker_index, should_count) = match ctx.slice {
         Some(ref s) => {
             let split_depth = if ctx.unused.len() >= 2 { 1usize } else { 0usize };
-            let stride = if depth == split_depth {
-                position_indices.len()
-            } else {
-                0
-            };
-            (depth == split_depth, s.num_workers as usize, s.worker_index as usize, stride)
+            let count = depth >= split_depth || s.worker_index == 0;
+            (depth == split_depth, s.num_workers as usize, s.worker_index as usize, count)
         }
-        None => (false, 1, 0, 0),
+        None => (false, 1, 0, true),
     };
-    let _ = task_stride; // only meaningful at split depth; computed above for clarity
 
     for (i_pos, &pos_arr_idx) in position_indices.iter().enumerate() {
         if *m.max_one_solution_hit {
@@ -1275,7 +1276,9 @@ fn iter_placements_inner(ctx: &IterCtx, m: &mut IterMutState, depth: usize, pare
             }
         }
 
-        m.meta.total_number_of_iterator_placement_attempts += 1.0;
+        if should_count {
+            m.meta.total_number_of_iterator_placement_attempts += 1.0;
+        }
         m.state.iter_check_counter += 1;
 
         // Throttle the JS `Date.now()` call — the wasm→JS call alone is more
@@ -1339,7 +1342,9 @@ fn iter_placements_inner(ctx: &IterCtx, m: &mut IterMutState, depth: usize, pare
         if transforms_needed > max_cells_at_left as i64 {
             revert_piece(&mut m.state.board, indices, figures_count);
             m.state.board_sum = (m.state.board_sum as i64 - delta) as usize;
-            m.meta.skipped_impossible_situations += skip_product;
+            if should_count {
+                m.meta.skipped_impossible_situations += skip_product;
+            }
             continue;
         }
 
@@ -1352,7 +1357,9 @@ fn iter_placements_inner(ctx: &IterCtx, m: &mut IterMutState, depth: usize, pare
             iter_placements_inner(ctx, m, depth + 1, i_pos);
         } else {
             // Leaf — check for solution. Sum equality is sufficient (see brute_force_one_start comment).
-            m.meta.total_number_of_tried_combinations += 1.0;
+            if should_count {
+                m.meta.total_number_of_tried_combinations += 1.0;
+            }
             if m.state.board_sum == completed_sum {
                 let parts = materialize_solution_parts(
                     ctx.pieces,

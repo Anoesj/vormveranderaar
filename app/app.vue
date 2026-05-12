@@ -162,6 +162,28 @@
                   </span>
                 </Label>
               </div>
+
+              <div class="grid grid-cols-subgrid col-span-full items-center">
+                <Switch
+                  id="use-multi-threading"
+                  v-model:checked="useMultiThreading"
+                  :disabled="!canMultiThread"
+                />
+                <Label for="use-multi-threading" class="leading-5">
+                  Use multi-threading
+                  <br>
+                  <span class="text-gray-400">
+                    <template v-if="canMultiThread">
+                      Spread the brute force across {{ recommendedWorkerCount() }} web workers
+                      ({{ navigator.hardwareConcurrency }} cores available). Falls back to a
+                      single worker if SharedArrayBuffer isn't available.
+                    </template>
+                    <template v-else>
+                      Only one logical core available — multi-threading is disabled.
+                    </template>
+                  </span>
+                </Label>
+              </div>
             </div>
           </div>
 
@@ -379,6 +401,23 @@
   const showFigures = useLocalStorage('showFigures', true);
   const calculateInBrowser = useLocalStorage('calculateInBrowser', true);
   const preparePossibleSolutionStarts = useLocalStorage('preparePossibleSolutionStarts', false);
+  const useMultiThreading = useLocalStorage('useMultiThreading', true);
+
+  // Single source of truth for whether the parallel solver is actually usable in
+  // this browser/run. Goes to false when there's only one logical core, when
+  // `SharedArrayBuffer` isn't exposed (no COOP/COEP), or when the user has turned
+  // the toggle off — the parallel path falls back to the existing single-worker
+  // flow automatically in those cases.
+  const parallelWorkerCount = computed(() => {
+    if (!calculateInBrowser.value) {
+      return 1;
+    }
+    if (!useMultiThreading.value) {
+      return 1;
+    }
+    return recommendedWorkerCount();
+  });
+  const canMultiThread = computed(() => recommendedWorkerCount() > 1);
 
   const puzzleOptions = shallowRef<PuzzleOptions>();
   const puzzleOptionsStringified = usePuzzleOptionsStringified(puzzleOptions);
@@ -470,38 +509,57 @@
 
     if (calculateInBrowser.value) {
       try {
-        response = await new Promise<InstanceType<typeof Puzzle>>((resolve, reject) => {
-          shapeshifterWorker.onmessage = (event) => {
-            const { type, payload } = event.data as {
-              type: 'status-update';
-              payload: string;
-            } | {
-              type: 'finished';
-              payload: InstanceType<typeof Puzzle>;
-            };
-
-            if (type === 'finished') {
-              resolve(payload);
-              status.value = undefined;
-            }
-            else {
-              status.value = payload;
-            }
-          };
-
-          shapeshifterWorker.onerror = (event) => {
-            status.value = undefined;
-            reject(event);
-          };
-
-          shapeshifterWorker.postMessage({
-            type: 'calculate',
-            payload: payload,
+        if (parallelWorkerCount.value > 1) {
+          // Parallel path: spin up N workers, give each a depth-1 slice. Falls back
+          // automatically to the single-worker path if SharedArrayBuffer is unavailable
+          // or hardwareConcurrency <= 1.
+          response = await parallelSolve({
+            payload,
             settings: {
               preparePossibleSolutionStarts: preparePossibleSolutionStarts.value,
             },
+            numWorkers: parallelWorkerCount.value,
+            signal: controller.signal,
+            onStatus: (msg) => {
+              status.value = msg;
+            },
+          }) as InstanceType<typeof Puzzle>;
+          status.value = undefined;
+        }
+        else {
+          response = await new Promise<InstanceType<typeof Puzzle>>((resolve, reject) => {
+            shapeshifterWorker.onmessage = (event) => {
+              const { type, payload } = event.data as {
+                type: 'status-update';
+                payload: string;
+              } | {
+                type: 'finished';
+                payload: InstanceType<typeof Puzzle>;
+              };
+
+              if (type === 'finished') {
+                resolve(payload);
+                status.value = undefined;
+              }
+              else {
+                status.value = payload;
+              }
+            };
+
+            shapeshifterWorker.onerror = (event) => {
+              status.value = undefined;
+              reject(event);
+            };
+
+            shapeshifterWorker.postMessage({
+              type: 'calculate',
+              payload: payload,
+              settings: {
+                preparePossibleSolutionStarts: preparePossibleSolutionStarts.value,
+              },
+            });
           });
-        });
+        }
       }
       catch (err) {
         error.value = (err as Error).toString();
