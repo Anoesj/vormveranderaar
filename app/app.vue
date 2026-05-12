@@ -174,8 +174,8 @@
                   <br>
                   <span class="text-gray-400">
                     <template v-if="canMultiThread">
-                      Spread the brute force across {{ recommendedWorkerCount() }} web workers
-                      ({{ navigator.hardwareConcurrency }} cores available). Falls back to a
+                      Spread the brute force across {{ workerCountForUi }} web workers
+                      ({{ coreCount }} cores available). Falls back to a
                       single worker if SharedArrayBuffer isn't available.
                     </template>
                     <template v-else>
@@ -418,6 +418,14 @@
     return recommendedWorkerCount();
   });
   const canMultiThread = computed(() => recommendedWorkerCount() > 1);
+  // `navigator` isn't part of the Vue template scope (and would be `undefined`
+  // during Nitro's SPA-shell prerender pass anyway), so expose the core count
+  // through a computed instead of referencing the global directly.
+  const coreCount = computed(() => {
+    if (typeof navigator === 'undefined') return 1;
+    return navigator.hardwareConcurrency || 1;
+  });
+  const workerCountForUi = computed(() => recommendedWorkerCount());
 
   const puzzleOptions = shallowRef<PuzzleOptions>();
   const puzzleOptionsStringified = usePuzzleOptionsStringified(puzzleOptions);
