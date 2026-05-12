@@ -2,6 +2,7 @@
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
 export const solve: (a: any, b: any, c: any) => [number, number, number];
+export const solve_slice: (a: any, b: any, c: any, d: number, e: number, f: number) => [number, number, number];
 export const on_start: () => void;
 export const __wbindgen_malloc: (a: number, b: number) => number;
 export const __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;

@@ -17,6 +17,33 @@ export function solve(options_js, settings_js, status_cb) {
     }
     return takeFromExternrefTable0(ret[0]);
 }
+
+/**
+ * Like `solve`, but processes only the tasks assigned to this worker out of `num_workers`.
+ *
+ * Slicing happens at "task depth": for puzzles with ≥ 2 unused puzzle pieces (the common
+ * case) that's depth 1 of the recursion — task index = `root_pos_i * num_depth1_positions
+ * + depth1_pos_i`, and worker `w` processes indices where `task_idx % num_workers == w`.
+ * For puzzles with exactly one unused piece, slicing falls back to depth 0.
+ *
+ * `stop_cb` is polled every ~65k attempts (same throttle as the time check). Typically
+ * backed by an `Atomics.load` on a `SharedArrayBuffer` so the orchestrator can broadcast
+ * "first worker found a solution, everyone bail" cheaply.
+ * @param {any} options_js
+ * @param {any} settings_js
+ * @param {Function} status_cb
+ * @param {number} num_workers
+ * @param {number} worker_index
+ * @param {Function | null} [stop_cb]
+ * @returns {any}
+ */
+export function solve_slice(options_js, settings_js, status_cb, num_workers, worker_index, stop_cb) {
+    const ret = wasm.solve_slice(options_js, settings_js, status_cb, num_workers, worker_index, isLikeNone(stop_cb) ? 0 : addToExternrefTable0(stop_cb));
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
 function __wbg_get_imports() {
     const import0 = {
         __proto__: null,
@@ -59,6 +86,10 @@ function __wbg_get_imports() {
         },
         __wbg___wbindgen_is_bigint_aeae3893f30ed54e: function(arg0) {
             const ret = typeof(arg0) === 'bigint';
+            return ret;
+        },
+        __wbg___wbindgen_is_falsy_402d3af0d5f09bc6: function(arg0) {
+            const ret = !arg0;
             return ret;
         },
         __wbg___wbindgen_is_function_5cd60d5cf78b4eef: function(arg0) {

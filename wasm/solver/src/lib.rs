@@ -476,6 +476,15 @@ struct Puzzle {
     t_last_still_thinking: f64,
     status_cb: Function,
     max_one_solution_hit: bool,
+    /// `Some` when the run is one slice of a multi-worker split (set by `solve_slice`).
+    /// Owned variant of `SliceCtx`; we hand a borrowed view to the recursion.
+    slice_ctx: Option<SliceCtxOwned>,
+}
+
+struct SliceCtxOwned {
+    worker_index: u32,
+    num_workers: u32,
+    stop_cb: Option<Function>,
 }
 
 fn now_ms() -> f64 {
@@ -541,6 +550,7 @@ impl Puzzle {
             t_last_still_thinking: now_ms(),
             status_cb,
             max_one_solution_hit: false,
+            slice_ctx: None,
         };
 
         puzzle.init_corners_info();
@@ -1082,6 +1092,11 @@ impl Puzzle {
                 initial_board: &initial_board,
                 start_index,
                 returning_max_one_solution: meta.returning_max_one_solution,
+                slice: self.slice_ctx.as_ref().map(|s| SliceCtx {
+                    worker_index: s.worker_index,
+                    num_workers: s.num_workers,
+                    stop_cb: s.stop_cb.as_ref(),
+                }),
             },
             &mut IterMutState {
                 state: &mut state,
@@ -1090,6 +1105,7 @@ impl Puzzle {
                 max_one_solution_hit,
                 t_last_still_thinking,
             },
+            0,
             0,
         );
     }
@@ -1169,6 +1185,20 @@ struct IterCtx<'a> {
     initial_board: &'a Grid,
     start_index: usize,
     returning_max_one_solution: bool,
+    /// `Some` when this run is one slice of a multi-worker split. The recursion uses
+    /// it (a) to skip depth-1 tasks not assigned to this worker, and (b) to poll the
+    /// shared stop flag at the same throttle point as the `now_ms` time check.
+    slice: Option<SliceCtx<'a>>,
+}
+
+/// Slicing/stop info for a single parallel worker. See `solve_slice`.
+struct SliceCtx<'a> {
+    worker_index: u32,
+    num_workers: u32,
+    /// JS callback returning `true` when this worker should stop ASAP (typically backed
+    /// by `Atomics.load(sharedStopBuffer, 0) !== 0`). Called every ~65k attempts; the
+    /// `wasm → JS` boundary is cheap enough at that rate.
+    stop_cb: Option<&'a Function>,
 }
 
 /// Per-call state held by value across recursion.
@@ -1193,7 +1223,7 @@ struct IterMutState<'a> {
     t_last_still_thinking: &'a mut f64,
 }
 
-fn iter_placements_inner(ctx: &IterCtx, m: &mut IterMutState, depth: usize) {
+fn iter_placements_inner(ctx: &IterCtx, m: &mut IterMutState, depth: usize, parent_i_pos: usize) {
     if *m.max_one_solution_hit {
         return;
     }
@@ -1213,9 +1243,36 @@ fn iter_placements_inner(ctx: &IterCtx, m: &mut IterMutState, depth: usize) {
     // benchmarked identically to the slice iterator, so we use the cleaner iterator.
     let position_indices = piece.position_indices(avoid_corners);
 
-    for &pos_arr_idx in position_indices {
+    // Slicing for multi-worker mode: at the depth where we hand out tasks to workers
+    // (depth 1 for "normal" puzzles with >=2 unused pieces, or depth 0 if there's only
+    // one unused piece), skip iterations whose `task_idx % num_workers != worker_index`.
+    // The task index is built deterministically so every worker enumerates the same
+    // tree, just keeps its own slice.
+    let (slice_at_this_depth, num_workers, worker_index, task_stride) = match ctx.slice {
+        Some(ref s) => {
+            let split_depth = if ctx.unused.len() >= 2 { 1usize } else { 0usize };
+            let stride = if depth == split_depth {
+                position_indices.len()
+            } else {
+                0
+            };
+            (depth == split_depth, s.num_workers as usize, s.worker_index as usize, stride)
+        }
+        None => (false, 1, 0, 0),
+    };
+    let _ = task_stride; // only meaningful at split depth; computed above for clarity
+
+    for (i_pos, &pos_arr_idx) in position_indices.iter().enumerate() {
         if *m.max_one_solution_hit {
             return;
+        }
+
+        // Skip tasks that belong to another worker.
+        if slice_at_this_depth {
+            let task_idx = parent_i_pos * position_indices.len() + i_pos;
+            if task_idx % num_workers != worker_index {
+                continue;
+            }
         }
 
         m.meta.total_number_of_iterator_placement_attempts += 1.0;
@@ -1225,6 +1282,18 @@ fn iter_placements_inner(ctx: &IterCtx, m: &mut IterMutState, depth: usize) {
         // expensive than dozens of iterations of the actual brute force.
         if m.state.iter_check_counter >= 65_536 {
             m.state.iter_check_counter = 0;
+            // While we're already crossing the wasm↔JS boundary for the time check,
+            // also poll the shared stop flag. Both are ~50-200ns; cheap at this throttle.
+            if let Some(slice) = ctx.slice.as_ref() {
+                if let Some(stop_cb) = slice.stop_cb {
+                    if let Ok(v) = stop_cb.call0(&JsValue::NULL) {
+                        if v.is_truthy() {
+                            *m.max_one_solution_hit = true;
+                            return;
+                        }
+                    }
+                }
+            }
             let now = now_ms();
             if now - *m.t_last_still_thinking > 5000.0 {
                 *m.t_last_still_thinking = now;
@@ -1280,7 +1349,7 @@ fn iter_placements_inner(ctx: &IterCtx, m: &mut IterMutState, depth: usize) {
         });
 
         if next_count > 0 {
-            iter_placements_inner(ctx, m, depth + 1);
+            iter_placements_inner(ctx, m, depth + 1, i_pos);
         } else {
             // Leaf — check for solution. Sum equality is sufficient (see brute_force_one_start comment).
             m.meta.total_number_of_tried_combinations += 1.0;
@@ -1501,6 +1570,56 @@ pub fn solve(
     let settings: SettingsIn = serde_wasm_bindgen::from_value(settings_js).unwrap_or_default();
 
     let mut puzzle = Puzzle::new(options, status_cb);
+
+    if settings.prepare_possible_solution_starts {
+        puzzle.prepare_possible_solution_starts();
+    }
+
+    puzzle.brute_force_solution();
+
+    let out = puzzle.into_output();
+    let serializer = serde_wasm_bindgen::Serializer::new()
+        .serialize_maps_as_objects(true)
+        .serialize_large_number_types_as_bigints(false);
+    out.serialize(&serializer)
+        .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
+}
+
+/// Like `solve`, but processes only the tasks assigned to this worker out of `num_workers`.
+///
+/// Slicing happens at "task depth": for puzzles with ≥ 2 unused puzzle pieces (the common
+/// case) that's depth 1 of the recursion — task index = `root_pos_i * num_depth1_positions
+/// + depth1_pos_i`, and worker `w` processes indices where `task_idx % num_workers == w`.
+/// For puzzles with exactly one unused piece, slicing falls back to depth 0.
+///
+/// `stop_cb` is polled every ~65k attempts (same throttle as the time check). Typically
+/// backed by an `Atomics.load` on a `SharedArrayBuffer` so the orchestrator can broadcast
+/// "first worker found a solution, everyone bail" cheaply.
+#[wasm_bindgen]
+pub fn solve_slice(
+    options_js: JsValue,
+    settings_js: JsValue,
+    status_cb: Function,
+    num_workers: u32,
+    worker_index: u32,
+    stop_cb: Option<Function>,
+) -> Result<JsValue, JsValue> {
+    let options: PuzzleOptionsIn = serde_wasm_bindgen::from_value(options_js)
+        .map_err(|e| JsValue::from_str(&format!("Invalid PuzzleOptions: {}", e)))?;
+    let settings: SettingsIn = serde_wasm_bindgen::from_value(settings_js).unwrap_or_default();
+
+    if num_workers == 0 || worker_index >= num_workers {
+        return Err(JsValue::from_str(
+            "solve_slice: invalid (num_workers, worker_index) pair",
+        ));
+    }
+
+    let mut puzzle = Puzzle::new(options, status_cb);
+    puzzle.slice_ctx = Some(SliceCtxOwned {
+        worker_index,
+        num_workers,
+        stop_cb,
+    });
 
     if settings.prepare_possible_solution_starts {
         puzzle.prepare_possible_solution_starts();
