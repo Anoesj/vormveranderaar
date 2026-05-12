@@ -1439,23 +1439,24 @@ fn combos_compatible(
 // ============================================================================
 
 fn fmt_num(n: f64) -> String {
-    // nl-NL style grouping with '.': just use a simple implementation.
-    let rounded = n.round() as i64;
-    let abs = rounded.abs();
-    let s = abs.to_string();
+    // nl-NL style grouping with '.'. Format the f64 *directly* — going through
+    // `as i64` would saturate at i64::MAX (~9.22e18), which is well within reach for
+    // big puzzles. With that cast, "total possible combinations", "skipped impossible
+    // situations" and "throughput" would all clamp to the same string mid-solve.
+    if !n.is_finite() {
+        return n.to_string();
+    }
+    let sign = if n < 0.0 { "-" } else { "" };
+    let s = format!("{:.0}", n.abs());
     let bytes = s.as_bytes();
-    let mut grouped = String::new();
+    let mut grouped = String::with_capacity(s.len() + s.len() / 3);
     for (i, b) in bytes.iter().enumerate() {
         if i > 0 && (bytes.len() - i) % 3 == 0 {
             grouped.push('.');
         }
         grouped.push(*b as char);
     }
-    if rounded < 0 {
-        format!("-{}", grouped)
-    } else {
-        grouped
-    }
+    format!("{}{}", sign, grouped)
 }
 
 fn fmt_duration(ms: f64) -> String {
@@ -1513,4 +1514,20 @@ pub fn solve(
         .serialize_large_number_types_as_bigints(false);
     out.serialize(&serializer)
         .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::fmt_num;
+
+    #[test]
+    fn fmt_num_handles_huge_f64() {
+        // ~3.3e19 — comfortably past i64::MAX (~9.22e18). With the old
+        // `as i64` cast this would saturate to "9.223.372.036.854.775.807".
+        assert_eq!(fmt_num(3.3e19), "33.000.000.000.000.000.000");
+        assert_eq!(fmt_num(1.0e20), "100.000.000.000.000.000.000");
+        assert_eq!(fmt_num(1234.0), "1.234");
+        assert_eq!(fmt_num(0.0), "0");
+        assert_eq!(fmt_num(-1234.0), "-1.234");
+    }
 }
